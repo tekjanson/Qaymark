@@ -7,3 +7,5 @@ open-webui/
 # Harness cache and per-run artifacts.
 context/
 .harness/
+# Python build artifacts.
+*.egg-info/

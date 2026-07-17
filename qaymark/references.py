@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -16,12 +17,17 @@ def _run(
     )
 
 
+def _refresh_disabled() -> bool:
+    return os.getenv("QAYMARK_NO_REFRESH") not in (None, "", "0")
+
+
 def ensure_repo(url: str, dest: Path) -> bool:
     """Clone *url* into *dest*, or fast-forward it if already present."""
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     if (dest / ".git").exists():
-        _run(["git", "-C", str(dest), "pull", "--ff-only"])
+        if not _refresh_disabled():
+            _run(["git", "-C", str(dest), "pull", "--ff-only"])
         return True
     result = _run(["git", "clone", "--depth", "1", url, str(dest)])
     return result.returncode == 0

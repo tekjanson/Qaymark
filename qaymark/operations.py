@@ -51,10 +51,16 @@ def _do_mkdir(root: Path, operation: dict[str, Any], outcome: OperationOutcome) 
     outcome.created_dirs.append(str(target.relative_to(root)))
 
 
-def _do_write(root: Path, operation: dict[str, Any], outcome: OperationOutcome) -> None:
+def _do_write(
+    root: Path, operation: dict[str, Any], outcome: OperationOutcome, protected: frozenset[str]
+) -> None:
     target = safe_target(root, operation.get("path", ""))
     if target is None:
         outcome.skipped.append(f"unsafe write path: {operation.get('path')!r}")
+        return
+    rel = target.relative_to(root).as_posix()
+    if rel in protected:
+        outcome.skipped.append(f"refused to overwrite protected file: {rel}")
         return
     content = _content_from_operation(operation)
     if content is None:
@@ -62,7 +68,7 @@ def _do_write(root: Path, operation: dict[str, Any], outcome: OperationOutcome) 
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    outcome.written.append(str(target.relative_to(root)))
+    outcome.written.append(rel)
 
 
 def _do_command(
@@ -83,7 +89,10 @@ def _do_command(
 
 
 def apply_operations(
-    root: Path, payload: dict[str, Any], allow_commands: bool = False
+    root: Path,
+    payload: dict[str, Any],
+    allow_commands: bool = False,
+    protected: frozenset[str] = frozenset(),
 ) -> OperationOutcome:
     """Apply every operation in *payload*, constrained to *root*."""
 
@@ -96,7 +105,7 @@ def apply_operations(
         if kind == "mkdir":
             _do_mkdir(root, operation, outcome)
         elif kind == "write_file":
-            _do_write(root, operation, outcome)
+            _do_write(root, operation, outcome, protected)
         elif kind == "run_command":
             _do_command(root, operation, outcome, allow_commands)
         else:
