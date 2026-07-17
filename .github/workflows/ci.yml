@@ -1,0 +1,29 @@
+name: CI
+
+# Server-side enforcement of the Qaymark hygiene gate. This runs on every push
+# and pull request. Combined with branch protection (require this check to pass,
+# no force-push), it makes the guardrails effectively unbypassable: any attempt
+# to weaken the gate or commit slop is rejected and visible in the diff.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the strict hygiene gate (slop-be-gone)
+        run: python3 scripts/hygiene_gate.py --path "${GITHUB_WORKSPACE}"
+
+      - name: Install sbg for engine-backed tests
+        run: pip install -e "${HOME}/.cache/local-coding-harness/slop-be-gone"
+
+      - name: Run unit tests
+        run: PYTHONPATH="${GITHUB_WORKSPACE}" python3 -m unittest discover -s tests -t . -v

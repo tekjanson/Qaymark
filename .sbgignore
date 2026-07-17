@@ -1,0 +1,9 @@
+# The hygiene rules file necessarily contains marker tokens as patterns.
+sbg_manifest.json
+# Local model runtime and WebUI data (not source).
+data/
+ollama/
+open-webui/
+# Harness cache and per-run artifacts.
+context/
+.harness/

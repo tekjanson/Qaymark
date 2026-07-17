@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Qaymark pre-commit hygiene gate.
+#
+# Enforces the strict slop-be-gone rules on staged changes. This hook is
+# version-controlled (core.hooksPath = .githooks) so any change to it is
+# visible in the diff and reviewable — it is not meant to be silently edited
+# or bypassed. Do not commit with --no-verify: CI runs the same gate and will
+# reject the push.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+exec python3 scripts/hygiene_gate.py --staged --path "$repo_root"

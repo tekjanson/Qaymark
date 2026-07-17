@@ -1,0 +1,267 @@
+{
+  "name": "fractal-consistency",
+  "description": "Strict slop-be-gone policy used by the local coding harness. Every rule the engine ships is enabled at error severity with tightened thresholds so generated code is small, flat, explicit, and consistent at every scale.",
+  "rules": [
+    {
+      "id": "placeholder-comments",
+      "type": "placeholder-comments",
+      "enabled": true,
+      "severity": "error",
+      "patterns": [
+        "placeholder",
+        "put your code here",
+        "replace me",
+        "change me",
+        "sample content",
+        "your code here",
+        "implement me",
+        "fill this in",
+        "fill in later",
+        "sample text"
+      ],
+      "description": "Reject placeholder comments and scaffold leftovers.",
+      "what": "Flags placeholder phrases and copied scaffolding.",
+      "why": "Placeholders signal unfinished work and erode trust in generated code."
+    },
+    {
+      "id": "marker-spam",
+      "type": "marker-spam",
+      "enabled": true,
+      "severity": "error",
+      "threshold": 2,
+      "match_mode": "regex",
+      "patterns": [
+        "\\bTODO\\b",
+        "\\bFIXME\\b",
+        "\\bXXX\\b",
+        "\\bHACK\\b"
+      ],
+      "description": "Fail on TODO/FIXME/XXX/HACK marker accumulation.",
+      "what": "Flags a file once it accumulates two or more deferred-work markers.",
+      "why": "Marker spam is deferred work masquerading as done work."
+    },
+    {
+      "id": "empty-files",
+      "type": "empty-files",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject empty or whitespace-only files.",
+      "what": "Flags files with no meaningful content.",
+      "why": "Empty files are dead scaffolding that add noise without value."
+    },
+    {
+      "id": "long-lines",
+      "type": "long-lines",
+      "enabled": true,
+      "severity": "error",
+      "max_length": 100,
+      "description": "Keep lines within 100 columns.",
+      "what": "Flags any line longer than 100 characters.",
+      "why": "Short lines stay readable in reviews, diffs, and split panes."
+    },
+    {
+      "id": "file-size",
+      "type": "file-size",
+      "enabled": true,
+      "severity": "error",
+      "max_bytes": 524288,
+      "exclude": [
+        "**/*.lock",
+        "**/*.min.js",
+        "**/*.min.css"
+      ],
+      "description": "Keep individual source files under 512 KB.",
+      "what": "Flags oversized files that should be split or generated elsewhere.",
+      "why": "Large files hide complexity and are hard to review or reason about."
+    },
+    {
+      "id": "button-actions",
+      "type": "button-actions",
+      "enabled": true,
+      "severity": "error",
+      "description": "Every HTML button needs an explicit action hook.",
+      "what": "Flags <button> elements with no data-action or onclick wiring.",
+      "why": "Unwired buttons are dead UI that looks finished but does nothing."
+    },
+    {
+      "id": "button-types",
+      "type": "button-types",
+      "enabled": true,
+      "severity": "error",
+      "description": "Every HTML button needs an explicit type.",
+      "what": "Flags <button> elements missing a type attribute.",
+      "why": "Implicit submit buttons cause surprising form behaviour."
+    },
+    {
+      "id": "form-labels",
+      "type": "form-labels",
+      "enabled": true,
+      "severity": "error",
+      "description": "Form inputs must be labelled.",
+      "what": "Flags inputs with no associated label.",
+      "why": "Unlabelled inputs break accessibility and usability."
+    },
+    {
+      "id": "asset-links",
+      "type": "asset-links",
+      "enabled": true,
+      "severity": "error",
+      "description": "HTML data-action hooks must resolve to real handlers.",
+      "what": "Flags data-action references that no script defines.",
+      "why": "Dangling action hooks are UI wired to nothing."
+    },
+    {
+      "id": "fully-defined-rules",
+      "type": "fully-defined-rules",
+      "enabled": true,
+      "severity": "error",
+      "description": "Manifest-style rule files must be fully defined.",
+      "what": "Flags rule entries in JSON rule files that are missing required fields.",
+      "why": "Half-defined rules silently no-op and give false confidence."
+    },
+    {
+      "id": "source-loadable",
+      "type": "source-loadable",
+      "enabled": true,
+      "severity": "error",
+      "description": "Referenced rule sources must be loadable.",
+      "what": "Flags rule source references that point at missing files.",
+      "why": "Broken source references make policy impossible to audit."
+    },
+    {
+      "id": "dynamic-config",
+      "type": "dynamic-config",
+      "enabled": true,
+      "severity": "error",
+      "exclude": [
+        "**/*.md",
+        "tests/**",
+        "**/test_*.py",
+        "**/*_test.py"
+      ],
+      "description": "Configuration must not be hard-coded where it should be dynamic.",
+      "what": "Flags hard-coded values in config candidates that should be injected.",
+      "why": "Hard-coded config is brittle and leaks environment assumptions."
+    },
+    {
+      "id": "merge-conflict-markers",
+      "type": "merge-conflict-markers",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject unresolved git conflict markers.",
+      "what": "Flags <<<<<<<, =======, and >>>>>>> markers.",
+      "why": "Conflict markers mean the merge was never finished."
+    },
+    {
+      "id": "secret-scan",
+      "type": "secret-scan",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject committed secrets and credentials.",
+      "what": "Flags private keys, cloud keys, and provider tokens.",
+      "why": "Committed secrets are an immediate security incident."
+    },
+    {
+      "id": "debug-artifacts",
+      "type": "debug-artifacts",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject leftover debug statements.",
+      "what": "Flags breakpoint(), pdb, debugger, and console debug calls.",
+      "why": "Debug artifacts leak noise and sometimes secrets into production."
+    },
+    {
+      "id": "trailing-whitespace",
+      "type": "trailing-whitespace",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject trailing whitespace.",
+      "what": "Flags lines ending in spaces or tabs.",
+      "why": "Trailing whitespace produces noisy, meaningless diffs."
+    },
+    {
+      "id": "final-newline",
+      "type": "final-newline",
+      "enabled": true,
+      "severity": "error",
+      "description": "Require a single trailing newline.",
+      "what": "Flags files that do not end with exactly one newline.",
+      "why": "Missing final newlines break POSIX tools and diffs."
+    },
+    {
+      "id": "python-syntax",
+      "type": "python-syntax",
+      "enabled": true,
+      "severity": "error",
+      "description": "Python must parse.",
+      "what": "Flags Python files that fail to parse into an AST.",
+      "why": "Unparseable code cannot run, import, or be reviewed."
+    },
+    {
+      "id": "python-bare-except",
+      "type": "python-bare-except",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject bare except clauses.",
+      "what": "Flags `except:` with no exception type.",
+      "why": "Bare excepts swallow control-flow signals and hide bugs."
+    },
+    {
+      "id": "python-broad-except",
+      "type": "python-broad-except",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject broad Exception/BaseException handlers.",
+      "what": "Flags `except Exception` / `except BaseException`.",
+      "why": "Broad handlers mask the specific failures they should surface."
+    },
+    {
+      "id": "python-mutable-default",
+      "type": "python-mutable-default",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject mutable default arguments.",
+      "what": "Flags list/dict/set literals used as default arguments.",
+      "why": "Mutable defaults are shared across calls and cause subtle bugs."
+    },
+    {
+      "id": "python-eval-exec",
+      "type": "python-eval-exec",
+      "enabled": true,
+      "severity": "error",
+      "description": "Reject eval/exec.",
+      "what": "Flags calls to eval() and exec().",
+      "why": "Dynamic execution is an injection and audit risk."
+    },
+    {
+      "id": "python-function-args",
+      "type": "python-function-args",
+      "enabled": true,
+      "severity": "error",
+      "max_args": 5,
+      "description": "Keep functions to at most five arguments.",
+      "what": "Flags functions declaring more than five parameters.",
+      "why": "Long argument lists signal a function doing too much; group them into a type."
+    },
+    {
+      "id": "python-function-length",
+      "type": "python-function-length",
+      "enabled": true,
+      "severity": "error",
+      "max_lines": 60,
+      "description": "Keep functions to at most sixty lines.",
+      "what": "Flags function bodies longer than sixty lines.",
+      "why": "Short functions compose and read cleanly at every scale."
+    },
+    {
+      "id": "python-nesting-depth",
+      "type": "python-nesting-depth",
+      "enabled": true,
+      "severity": "error",
+      "max_depth": 4,
+      "description": "Keep nesting to at most four levels deep.",
+      "what": "Flags control-flow nested deeper than four levels.",
+      "why": "Flat control flow is the visible signature of clear logic."
+    }
+  ]
+}

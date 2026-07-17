@@ -1,0 +1,37 @@
+# --- Local runtime data (never commit) ---
+# Ollama model blobs + the container SSH key live here (~16GB).
+/ollama/
+# Open WebUI database, uploads, and vector store.
+/open-webui/
+# Misc local data.
+/data/
+
+# --- Secrets / environment ---
+.env
+*.pem
+*.key
+id_ed25519
+id_ed25519.pub
+id_rsa
+id_rsa.pub
+
+# --- Harness runtime ---
+# Cloned reference tools and per-run artifacts.
+context/
+.harness/
+.harness-cache/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+build/
+dist/
+
+# --- Node / editor cruft ---
+node_modules/
+.DS_Store

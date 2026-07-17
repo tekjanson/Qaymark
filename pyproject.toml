@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qaymark"
+version = "0.2.0"
+description = "Qaymark: a guardrailed local AI code-generation factory. Waymark is the intended visual frontend; the CLI is fully usable on its own."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+qaymark = "qaymark.cli:main"
+
+[tool.setuptools]
+packages = ["qaymark"]
