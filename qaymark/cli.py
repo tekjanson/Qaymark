@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-idud", action="store_true", help="Skip the idud reference bridge")
     parser.add_argument("--no-strict", action="store_true", help="Do not fail on hygiene warnings")
     parser.add_argument("--seed", default=None, help="Dir of spec/test files to plant (protected)")
+    parser.add_argument("--starter", default=None, help="Dir of starter files to plant (editable)")
     parser.add_argument("--workers", type=int, default=1, help="Parallel fleet workers (>1 races)")
     return parser
 
@@ -54,6 +55,8 @@ def config_from_args(args: argparse.Namespace) -> HarnessConfig:
         config.strict = False
     if args.seed:
         config.seed_dir = Path(args.seed).expanduser()
+    if args.starter:
+        config.starter_dir = Path(args.starter).expanduser()
     return config
 
 

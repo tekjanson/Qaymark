@@ -45,6 +45,29 @@ Class `Tetris`:
 Lines cleared in one call → base points, multiplied by `level`:
 `{1: 100, 2: 300, 3: 500, 4: 800}`.
 
+## Suggested internal structure (keeps methods small and lines short)
+
+Represent a piece with `.kind` and `.cells`. Add small private helpers so no
+method is long and no line exceeds 100 characters:
+
+- `_shape(self, kind)` — return the four base `(x, y)` cells for a kind, shifted
+  by a horizontal spawn offset near the centre so that `min(y) == 0`.
+- `_fits(self, cells)` — return `True` only if every `(x, y)` is inside the board
+  and `self.board[y][x] == 0`. Use this in move, rotate, and spawn so those
+  methods stay one or two lines and avoid long inline conditions.
+- `_full_rows(self)` — return the list of `y` indices whose row is fully filled.
+- `_lock(self)` — write the current piece's cells into the board.
+- `_points(self, count)` — return the score for clearing `count` rows.
+
+Then keep the public methods tiny:
+
+- `move`: shift the cells, apply only if `_fits`.
+- `rotate`: rotate the cells about the centre cell, apply only if `_fits`
+  (`"O"` returns `True` unchanged).
+- `clear_lines`: keep the non-full rows, insert empty rows on top, update
+  `lines_cleared`, `level`, and `score`, return the count.
+- `hard_drop`: move down while `_fits`, then `_lock`, `clear_lines`, `spawn`.
+
 ## Constraints
 
 - Everything must pass the strict slop-be-gone gate: functions ≤ 60 lines, ≤ 5

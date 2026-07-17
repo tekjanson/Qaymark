@@ -67,6 +67,7 @@ class HarnessConfig:
     strict: bool = True
     request_timeout: int = field(default_factory=lambda: _env_int("HARNESS_REQUEST_TIMEOUT", 600))
     seed_dir: Path | None = None
+    starter_dir: Path | None = None
     protected: frozenset[str] = frozenset()
 
     def artifact_dir(self) -> Path:

@@ -95,7 +95,20 @@ def fallback_scan(workspace: Path, files: list[Path]) -> HygieneResult:
     return HygieneResult(passed=not violations, violations=violations, degraded=True)
 
 
-def format_hygiene_feedback(result: HygieneResult, limit: int = 12) -> str:
+def _offending_line(root: object, violation: dict[str, Any]) -> str:
+    line_no = violation.get("line")
+    path = violation.get("path")
+    if root is None or line_no is None or not path:
+        return ""
+    try:
+        text = (Path(str(root)) / path).read_text(encoding="utf-8", errors="ignore")
+        source = text.splitlines()[int(line_no) - 1]
+    except (OSError, IndexError, ValueError):
+        return ""
+    return f"  >>> {source.strip()[:120]}"
+
+
+def format_hygiene_feedback(result: HygieneResult, root: object = None, limit: int = 12) -> str:
     if result.error:
         return f"Hygiene gate could not run ({result.error}); relying on degraded checks."
     if not result.violations:
@@ -109,4 +122,7 @@ def format_hygiene_feedback(result: HygieneResult, limit: int = 12) -> str:
         rule_id = violation.get("rule_id", "?")
         message = violation.get("message", "")
         lines.append(f"  - [{rule_id}] {location}: {message}")
+        snippet = _offending_line(root, violation)
+        if snippet:
+            lines.append(snippet)
     return "\n".join(lines)

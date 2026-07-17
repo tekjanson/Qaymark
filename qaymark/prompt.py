@@ -67,16 +67,16 @@ def build_user_prompt(
 def _validation_section(report: AttemptReport) -> str:
     if report.validation_ok:
         return "- Validation: passed."
-    return f"- Validation FAILED:\n{report.validation_output.strip()[:800]}"
+    return f"- Validation FAILED (fix these first):\n{report.validation_output.strip()[:1600]}"
 
 
-def synthesize_feedback(report: AttemptReport) -> str:
+def synthesize_feedback(report: AttemptReport, root: object = None) -> str:
     """Fuse validation, hygiene, and idud results into next-attempt feedback."""
 
     parts = [
         f"Attempt {report.attempt} feedback:",
         _validation_section(report),
-        format_hygiene_feedback(report.hygiene),
+        format_hygiene_feedback(report.hygiene, root),
         format_idud_feedback(report.idud),
     ]
     if report.operations.skipped:
