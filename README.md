@@ -46,7 +46,7 @@ Start the runtime and pull the default model:
 make up
 ```
 
-- Open WebUI: <http://localhost:8090>  (moved off `3000` to avoid clashing with
+- Open WebUI: <http://localhost:8095>  (moved off `3000` to avoid clashing with
   dev servers such as Waymark)
 - Ollama API: <http://localhost:11434>
 
@@ -133,7 +133,8 @@ cp .env.example .env
 | --- | --- | --- |
 | `OLLAMA_MODEL` | `qwen2.5-coder:3b` | Model to pull/use |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
-| `WEBUI_PORT` | `8090` | Open WebUI host port |
+| `WEBUI_PORT` | `8095` | Open WebUI host port |
+| `OLLAMA_ORIGINS` | `*` | Browser origins allowed to call Ollama (for Waymark) |
 | `WEBUI_AUTH` | `False` | WebUI auth (disable only on a fresh DB) |
 | `RESET_WEBUI_DATA` | `0` | Wipe the WebUI DB on bootstrap (destructive) |
 | `HARNESS_MAX_ATTEMPTS` | `3` | One-shot attempts per run |
