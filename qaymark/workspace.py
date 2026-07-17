@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from .config import ARTIFACT_DIR_NAME, IGNORE_NAMES
@@ -77,3 +78,24 @@ def ensure_sbgignore(root: Path) -> None:
     if target.exists() and target.read_text(encoding="utf-8") == desired:
         return
     target.write_text(desired, encoding="utf-8")
+
+
+def seed_workspace(root: Path, seed_dir: Path | None) -> list[str]:
+    """Copy seed_dir's files into the workspace, returning their rel paths.
+
+    Used to plant the fixed spec and acceptance tests. The returned paths are
+    treated as protected so generated operations cannot overwrite them.
+    """
+
+    if seed_dir is None:
+        return []
+    seeded: list[str] = []
+    for src in sorted(seed_dir.rglob("*")):
+        if src.is_dir():
+            continue
+        rel = src.relative_to(seed_dir)
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target)
+        seeded.append(rel.as_posix())
+    return seeded

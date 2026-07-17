@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-commands", action="store_true", help="Permit run_command ops")
     parser.add_argument("--no-idud", action="store_true", help="Skip the idud reference bridge")
     parser.add_argument("--no-strict", action="store_true", help="Do not fail on hygiene warnings")
+    parser.add_argument("--seed", default=None, help="Dir of spec/test files to plant (protected)")
+    parser.add_argument("--workers", type=int, default=1, help="Parallel fleet workers (>1 races)")
     return parser
 
 
@@ -50,12 +52,29 @@ def config_from_args(args: argparse.Namespace) -> HarnessConfig:
         config.use_idud = False
     if args.no_strict:
         config.strict = False
+    if args.seed:
+        config.seed_dir = Path(args.seed).expanduser()
     return config
+
+
+def _run_fleet(config: HarnessConfig, workers: int) -> int:
+    from .fleet import run_fleet
+
+    result = run_fleet(config, workers)
+    print(f"fleet outcomes (worker -> exit): {result.outcomes}", flush=True)
+    if result.winner is None:
+        print("fleet: no worker passed the gate", flush=True)
+        return 1
+    print(f"✅ fleet winner: worker-{result.winner} -> {result.result_dir}", flush=True)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return run_harness(config_from_args(args))
+    config = config_from_args(args)
+    if args.workers and args.workers > 1:
+        return _run_fleet(config, args.workers)
+    return run_harness(config)
 
 
 if __name__ == "__main__":

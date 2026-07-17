@@ -17,7 +17,7 @@ from .operations import apply_operations
 from .prompt import build_system_prompt, build_user_prompt, load_rule_digest, synthesize_feedback
 from .references import ensure_idud_binary, ensure_slop_src
 from .report import AttemptReport
-from .workspace import ensure_sbgignore, iter_files, summarize_workspace
+from .workspace import ensure_sbgignore, iter_files, seed_workspace, summarize_workspace
 
 
 @dataclass
@@ -111,7 +111,7 @@ def _attempt(
     snapshot = summarize_workspace(config.workspace)
     user = build_user_prompt(config.task, config.validation_command, snapshot, feedback)
     payload = _generate(config, system, user)
-    outcome = apply_operations(config.workspace, payload, config.allow_commands)
+    outcome = apply_operations(config.workspace, payload, config.allow_commands, config.protected)
     ensure_sbgignore(config.workspace)
     validation = run_validation(config.workspace, config.validation_command)
     hygiene = run_hygiene(config, tools)
@@ -127,6 +127,7 @@ def run_harness(config: HarnessConfig) -> int:
     """Run the guardrailed loop; return 0 on success, non-zero otherwise."""
 
     config.workspace.mkdir(parents=True, exist_ok=True)
+    config.protected = frozenset(seed_workspace(config.workspace, config.seed_dir))
     ensure_sbgignore(config.workspace)
     tools = provision(config)
     system = build_system_prompt(load_rule_digest(config.manifest_path))

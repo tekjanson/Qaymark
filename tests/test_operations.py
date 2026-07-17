@@ -52,6 +52,16 @@ class ApplyOperationsTests(unittest.TestCase):
         outcome = apply_operations(self.root, {"operations": [{"kind": "delete", "path": "m"}]})
         self.assertTrue(any("unknown" in note for note in outcome.skipped))
 
+    def test_protected_file_is_not_overwritten(self) -> None:
+        spec = self.root / "tests" / "spec.py"
+        spec.parent.mkdir()
+        spec.write_text("original\n", encoding="utf-8")
+        op = {"kind": "write_file", "path": "tests/spec.py", "lines": ["hacked"]}
+        guard = frozenset({"tests/spec.py"})
+        outcome = apply_operations(self.root, {"operations": [op]}, protected=guard)
+        self.assertEqual(spec.read_text(encoding="utf-8"), "original\n")
+        self.assertTrue(any("protected" in note for note in outcome.skipped))
+
 
 if __name__ == "__main__":
     unittest.main()
