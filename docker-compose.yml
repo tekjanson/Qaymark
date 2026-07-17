@@ -11,6 +11,10 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      # Allow browser-based clients (e.g. a deployed Waymark) to call the API.
+      # Defaults to "*"; set OLLAMA_ORIGINS to your exact Waymark origin(s) to
+      # lock it down (comma-separated).
+      - OLLAMA_ORIGINS=${OLLAMA_ORIGINS:-*}
     pull_policy: missing
     tty: true
     restart: unless-stopped
@@ -38,9 +42,9 @@ services:
       ollama:
         condition: service_healthy
     ports:
-      # Defaults to 8090 to avoid clashing with common dev servers (e.g. the
-      # Waymark web app on 3000). Override with WEBUI_PORT in your .env.
-      - "${WEBUI_PORT:-8090}:8080"
+      # Defaults to 8095 to avoid clashing with common dev servers (Waymark web
+      # on 3000, Waymark p2p on 8090). Override with WEBUI_PORT in your .env.
+      - "${WEBUI_PORT:-8095}:8080"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       # Auth can only be disabled on a fresh install (no existing users).
