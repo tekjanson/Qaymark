@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -62,6 +63,19 @@ def run_validation(root: Path, command: str) -> subprocess.CompletedProcess[str]
     )
 
 
+def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> None:
+    """Run black on generated Python files (if available) so style is deterministic."""
+
+    black = shutil.which("black")
+    if black is None:
+        return
+    targets = [f for f in written if f.endswith(".py") and f not in protected]
+    if not targets:
+        return
+    cmd = [black, "-q", "-l", "100", *targets]
+    subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=120, check=False)
+
+
 def run_hygiene(config: HarnessConfig, tools: Tools) -> HygieneResult:
     if tools.slop_src is not None:
         return run_sbg(config.workspace, config.manifest_path, tools.slop_src, config.strict)
@@ -112,6 +126,7 @@ def _attempt(
     user = build_user_prompt(config.task, config.validation_command, snapshot, feedback)
     payload = _generate(config, system, user)
     outcome = apply_operations(config.workspace, payload, config.allow_commands, config.protected)
+    autoformat(config.workspace, outcome.written, config.protected)
     ensure_sbgignore(config.workspace)
     validation = run_validation(config.workspace, config.validation_command)
     hygiene = run_hygiene(config, tools)
@@ -128,6 +143,7 @@ def run_harness(config: HarnessConfig) -> int:
 
     config.workspace.mkdir(parents=True, exist_ok=True)
     config.protected = frozenset(seed_workspace(config.workspace, config.seed_dir))
+    seed_workspace(config.workspace, config.starter_dir)  # starter files stay editable
     ensure_sbgignore(config.workspace)
     tools = provision(config)
     system = build_system_prompt(load_rule_digest(config.manifest_path))
@@ -138,12 +154,13 @@ def run_harness(config: HarnessConfig) -> int:
         try:
             report = _attempt(config, tools, system, feedback, attempt)
         except OSError as exc:
-            print(f"harness attempt failed: {exc}", file=sys.stderr)
-            return 2
+            print(f"attempt {attempt} errored (continuing): {exc}", file=sys.stderr)
+            feedback = f"Attempt {attempt} did not finish ({exc}). Regenerate a complete file."
+            continue
         if report.passed():
             print(f"✅ guardrails passed on attempt {attempt}", flush=True)
             return 0
-        feedback = synthesize_feedback(report)
+        feedback = synthesize_feedback(report, config.workspace)
         print(feedback, flush=True)
 
     print("harness reached the maximum number of guardrailed attempts", file=sys.stderr)

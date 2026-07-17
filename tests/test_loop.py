@@ -69,5 +69,23 @@ class LoopTests(unittest.TestCase):
         self.assertTrue((self.tmp / ".harness" / "run-attempt-1.json").exists())
 
 
+class AutoformatTests(unittest.TestCase):
+    def test_skips_protected_and_non_python(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        with mock.patch.object(loop.shutil, "which", return_value="/usr/bin/black"):
+            with mock.patch.object(loop.subprocess, "run") as run:
+                loop.autoformat(root, ["a.py", "b.txt", "spec.py"], frozenset({"spec.py"}))
+        cmd = run.call_args[0][0]
+        self.assertIn("a.py", cmd)
+        self.assertNotIn("b.txt", cmd)
+        self.assertNotIn("spec.py", cmd)
+
+    def test_noop_when_black_missing(self) -> None:
+        with mock.patch.object(loop.shutil, "which", return_value=None):
+            with mock.patch.object(loop.subprocess, "run") as run:
+                loop.autoformat(Path("/tmp"), ["a.py"], frozenset())
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

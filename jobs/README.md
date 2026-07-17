@@ -13,8 +13,15 @@ clears the strict hygiene gate.
 jobs/<name>/
   TASK.md        # the task/spec (passed to the harness as --task)
   seed/          # files planted into the workspace (protected acceptance tests)
-  run.sh         # convenience runner (fleet)
+  starter/       # editable scaffold planted into the workspace (the model fills it)
+  run.sh         # convenience runner
+  example/       # a solution the factory produced (for reference)
 ```
+
+`seed/` files are protected (the model cannot edit them). `starter/` files are a
+head start the model completes. Generated code is auto-formatted with `black`
+(if on PATH) before the strict hygiene gate, so the model only has to get the
+logic right.
 
 ## Tetris
 
@@ -22,9 +29,11 @@ Build a headless Tetris core that passes `seed/test_tetris.py`:
 
 ```bash
 jobs/tetris/run.sh /tmp/qaymark-tetris
-# or tune the fleet:
-WORKERS=4 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
+# or tune it:
+WORKERS=1 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
   jobs/tetris/run.sh /tmp/qaymark-tetris
 ```
 
-The winning workspace is copied to `<workspace>/result`.
+The winning `tetris.py` lands in the workspace (or `<workspace>/result` for a
+fleet). `example/tetris.py` is a solution the factory generated — it passes all
+16 acceptance tests and the strict hygiene gate.
