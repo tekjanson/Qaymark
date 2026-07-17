@@ -49,6 +49,8 @@ make up
 - Open WebUI: <http://localhost:8095>  (moved off `3000` to avoid clashing with
   dev servers such as Waymark)
 - Ollama API: <http://localhost:11434>
+- Control plane: `make dashboard ROOT=/tmp/qaymark-dashboard` with
+  `DASHBOARD_USER` / `DASHBOARD_PASSWORD`
 
 Run the guardrailed harness against a workspace:
 
@@ -92,6 +94,43 @@ The `sbg` and `idud` tools are cloned (and idud built) once into a cache
 directory (`~/.cache/local-coding-harness` by default) and reused. If a tool
 cannot be provisioned, the harness degrades gracefully: a minimal built-in
 hygiene scanner stands in for `sbg`, and the idud step is skipped.
+
+## Around-the-clock supervisor (the perfection loop)
+
+`make harness` builds once and exits. `make supervise` keeps the factory alive:
+after the first green build it **watches for human feedback** and rebuilds
+automatically whenever you leave a note in the control plane.
+
+```bash
+make supervise TASK="$(cat jobs/tetris-web/TASK.md)" WORKSPACE=/tmp/factory/tetris
+```
+
+1. It builds once (same guardrailed loop) and lands in the `watching` phase.
+2. You open the dashboard, and in the **Feedback** panel you type what you don't
+   like ("this sucks, make the board bigger"). You never have to touch the code
+   or the terminal.
+3. The supervisor folds your note into the next one-shot and rebuilds. The
+   rebuild is **snapshotted first and rolled back if it fails** the tests or
+   hygiene gate, so the workspace never regresses to a broken state.
+4. It returns to `watching` for your next note — around the clock.
+
+Feedback is stored per workspace in `<workspace>/.harness/feedback.txt`; the
+harness reads it on every attempt, so it also works as plain-text drop-in.
+
+## Control plane (single sign-in)
+
+One login gives you visibility over every workspace under a root directory —
+phases, attempts, validation, hygiene, and the feedback channel:
+
+```bash
+export DASHBOARD_USER=admin DASHBOARD_PASSWORD='choose-a-password'
+make dashboard ROOT=/tmp/factory PORT=8765
+# open http://127.0.0.1:8765 and sign in
+```
+
+The dashboard discovers any workspace with a `.harness/status.json` beneath
+`ROOT`, shows a global overview (total / running / passed / failed), and lets
+you submit feedback that drives the supervisor's next rebuild.
 
 ## The hygiene manifest
 
@@ -140,6 +179,8 @@ cp .env.example .env
 | `HARNESS_MAX_ATTEMPTS` | `3` | One-shot attempts per run |
 | `HARNESS_ALLOW_COMMANDS` | `0` | Permit model `run_command` operations |
 | `HARNESS_USE_IDUD` | `1` | Build/use the idud reference bridge |
+| `DASHBOARD_USER` | `admin` | Sign-in username for the control plane |
+| `DASHBOARD_PASSWORD` | `qaymark` | Sign-in password for the control plane |
 
 > Disabling `WEBUI_AUTH` only works on a fresh Open WebUI database. If you see
 > "You can't turn off authentication because there are existing users", run once

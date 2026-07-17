@@ -27,10 +27,60 @@ class Tools:
     idud_binary: Path | None
 
 
-def fallback_operations(task: str) -> list[dict[str, object]]:
-    """A hygiene-clean stub used only when the model returns no operations."""
+def _status_path(config: HarnessConfig) -> Path:
+    return config.artifact_dir() / "status.json"
 
-    del task  # Kept generic so user task text can never trip a hygiene rule.
+
+def _feedback_path(config: HarnessConfig) -> Path:
+    return config.artifact_dir() / "feedback.txt"
+
+
+def _load_external_feedback(config: HarnessConfig) -> str | None:
+    path = _feedback_path(config)
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    return text or None
+
+
+def _merge_feedback(primary: str | None, secondary: str | None) -> str | None:
+    if primary and secondary:
+        return primary + "\n\n" + secondary
+    return primary or secondary
+
+
+def _write_status(
+    config: HarnessConfig,
+    phase: str,
+    attempt: int | None = None,
+    report: AttemptReport | None = None,
+) -> None:
+    payload: dict[str, object] = {
+        "phase": phase,
+        "task": config.task,
+        "workspace": str(config.workspace),
+        "attempt": attempt,
+        "max_attempts": config.max_attempts,
+    }
+    if report is not None:
+        payload.update(
+            {
+                "validation_ok": report.validation_ok,
+                "validation_output": report.validation_output,
+                "hygiene_passed": report.hygiene.passed,
+                "hygiene_degraded": report.hygiene.degraded,
+                "hygiene_violations": len(report.hygiene.violations),
+                "idud_available": report.idud.available,
+                "written": report.operations.written,
+                "skipped": report.operations.skipped,
+            }
+        )
+    path = _status_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _fallback_python_solution() -> list[dict[str, object]]:
     return [
         {
             "kind": "write_file",
@@ -49,6 +99,116 @@ def fallback_operations(task: str) -> list[dict[str, object]]:
             ],
         }
     ]
+
+
+def _fallback_webtetris() -> dict[str, object]:
+    return {
+        "kind": "write_file",
+        "path": "webtetris.py",
+        "lines": [
+            '"""Python seam for a browser-playable Tetris job."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            "from tetris import Tetris",
+            "",
+            "",
+            "def game_state(tetris: Tetris) -> dict:",
+            '    raise NotImplementedError("Return a JSON-friendly snapshot.")',
+            "",
+            "",
+            "def apply_action(tetris: Tetris, action: str) -> None:",
+            '    raise NotImplementedError("Apply one action to the game.")',
+        ],
+    }
+
+
+def _fallback_index_html() -> dict[str, object]:
+    return {
+        "kind": "write_file",
+        "path": "index.html",
+        "lines": [
+            "<!doctype html>",
+            '<html lang="en">',
+            "  <head>",
+            '    <meta charset="utf-8">',
+            '    <meta name="viewport" content="width=device-width, initial-scale=1">',
+            "    <title>Qaymark Tetris</title>",
+            '    <link rel="stylesheet" href="styles.css">',
+            '    <script defer src="app.js"></script>',
+            "  </head>",
+            "  <body>",
+            '    <canvas id="board" width="320" height="640"></canvas>',
+            '    <p id="message" role="status"></p>',
+            '    <button id="start" type="button" data-action="start">Start</button>',
+            '    <button id="pause" type="button" data-action="pause">Pause</button>',
+            '    <button id="restart" type="button" data-action="restart">Restart</button>',
+            '    <div id="score">0</div>',
+            '    <div id="level">1</div>',
+            '    <div id="lines">0</div>',
+            "  </body>",
+            "</html>",
+        ],
+    }
+
+
+def _fallback_app_js() -> dict[str, object]:
+    return {
+        "kind": "write_file",
+        "path": "app.js",
+        "lines": [
+            "const WIDTH = 10;",
+            "const HEIGHT = 20;",
+            "const CELL = 32;",
+            "",
+            "function gameState() {",
+            '  throw new Error("Implement the browser state snapshot.");',
+            "}",
+            "",
+            "function applyAction() {",
+            '  throw new Error("Implement the browser action handler.");',
+            "}",
+            "",
+            'document.getElementById("start").addEventListener("click", () => {});',
+            'document.getElementById("pause").addEventListener("click", () => {});',
+            'document.getElementById("restart").addEventListener("click", () => {});',
+        ],
+    }
+
+
+def _fallback_styles_css() -> dict[str, object]:
+    return {
+        "kind": "write_file",
+        "path": "styles.css",
+        "lines": [
+            "* {",
+            "  box-sizing: border-box;",
+            "}",
+            "",
+            "body {",
+            "  margin: 0;",
+            "  font-family: system-ui, sans-serif;",
+            "}",
+        ],
+    }
+
+
+def _fallback_web_solution() -> list[dict[str, object]]:
+    return [
+        _fallback_webtetris(),
+        _fallback_index_html(),
+        _fallback_app_js(),
+        _fallback_styles_css(),
+    ]
+
+
+def fallback_operations(task: str) -> list[dict[str, object]]:
+    """A hygiene-clean stub used only when the model returns no operations."""
+
+    lower = task.lower()
+    if any(keyword in lower for keyword in ("web", "browser", "html", "javascript")):
+        return _fallback_web_solution()
+    return _fallback_python_solution()
 
 
 def provision(config: HarnessConfig) -> Tools:
@@ -148,8 +308,11 @@ def run_harness(config: HarnessConfig) -> int:
     tools = provision(config)
     system = build_system_prompt(load_rule_digest(config.manifest_path))
     feedback: str | None = None
+    _write_status(config, "starting")
 
     for attempt in range(1, config.max_attempts + 1):
+        feedback = _merge_feedback(_load_external_feedback(config), feedback)
+        _write_status(config, "attempting", attempt)
         print(f"== attempt {attempt}/{config.max_attempts} ==", flush=True)
         try:
             report = _attempt(config, tools, system, feedback, attempt)
@@ -158,10 +321,13 @@ def run_harness(config: HarnessConfig) -> int:
             feedback = f"Attempt {attempt} did not finish ({exc}). Regenerate a complete file."
             continue
         if report.passed():
+            _write_status(config, "passed", attempt, report)
             print(f"✅ guardrails passed on attempt {attempt}", flush=True)
             return 0
         feedback = synthesize_feedback(report, config.workspace)
+        _write_status(config, "retrying", attempt, report)
         print(feedback, flush=True)
 
+    _write_status(config, "failed")
     print("harness reached the maximum number of guardrailed attempts", file=sys.stderr)
     return 1

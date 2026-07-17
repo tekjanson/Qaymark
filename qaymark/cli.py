@@ -33,6 +33,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", default=None, help="Dir of spec/test files to plant (protected)")
     parser.add_argument("--starter", default=None, help="Dir of starter files to plant (editable)")
     parser.add_argument("--workers", type=int, default=1, help="Parallel fleet workers (>1 races)")
+    parser.add_argument(
+        "--supervise",
+        action="store_true",
+        help="Stay alive after the build and rebuild whenever new feedback arrives",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between feedback checks in --supervise mode",
+    )
     return parser
 
 
@@ -72,11 +83,20 @@ def _run_fleet(config: HarnessConfig, workers: int) -> int:
     return 0
 
 
+def _run_supervisor(config: HarnessConfig, poll_interval: float) -> int:
+    from .factory import supervise
+
+    result = supervise(config, poll_interval=poll_interval)
+    return 0 if result.passed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = config_from_args(args)
     if args.workers and args.workers > 1:
         return _run_fleet(config, args.workers)
+    if args.supervise:
+        return _run_supervisor(config, args.poll_interval)
     return run_harness(config)
 
 
