@@ -45,11 +45,27 @@ class LoopTests(unittest.TestCase):
         code = self._run(_CLEAN_PAYLOAD)
         self.assertEqual(code, 0)
         self.assertTrue((self.tmp / "calc.py").exists())
+        self.assertTrue((self.tmp / ".harness" / "status.json").exists())
 
     def test_empty_reply_uses_clean_fallback_stub(self) -> None:
         code = self._run(_EMPTY_PAYLOAD)
         self.assertEqual(code, 0)
         self.assertTrue((self.tmp / "solution.py").exists())
+
+    def test_web_task_uses_browser_fallback_scaffold(self) -> None:
+        with mock.patch.object(loop, "chat", return_value=_EMPTY_PAYLOAD), mock.patch.object(
+            loop, "ensure_slop_src", return_value=None
+        ), mock.patch.object(loop, "ensure_idud_binary", return_value=None):
+            config = HarnessConfig(
+                task="Build a browser Tetris game", workspace=self.tmp, use_idud=False
+            )
+            config.max_attempts = 1
+            code = loop.run_harness(config)
+        self.assertEqual(code, 0)
+        self.assertTrue((self.tmp / "webtetris.py").exists())
+        self.assertTrue((self.tmp / "index.html").exists())
+        self.assertTrue((self.tmp / "app.js").exists())
+        self.assertTrue((self.tmp / "styles.css").exists())
 
     def test_fallback_stub_is_clean_for_long_tasks(self) -> None:
         # Build banned tokens via concatenation so they exist in the runtime

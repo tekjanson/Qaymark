@@ -37,3 +37,18 @@ WORKERS=1 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
 The winning `tetris.py` lands in the workspace (or `<workspace>/result` for a
 fleet). `example/tetris.py` is a solution the factory generated — it passes all
 16 acceptance tests and the strict hygiene gate.
+
+## Playable web Tetris
+
+Build a browser-playable Tetris that passes `seed/test_webtetris.py` and ships
+the `index.html` / `app.js` / `styles.css` UI alongside `webtetris.py`:
+
+```bash
+jobs/tetris-web/run.sh /tmp/qaymark-tetris-web
+# or tune it:
+WORKERS=1 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
+  jobs/tetris-web/run.sh /tmp/qaymark-tetris-web
+```
+
+The winning workspace is static-site ready; open it from a local web server to
+play in the browser.

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Qaymark Tetris</title>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game">
+        <canvas id="board" width="320" height="640" aria-label="Tetris board"></canvas>
+        <p id="message" class="message" role="status"></p>
+      </section>
+      <aside class="hud">
+        <h1>Qaymark Tetris</h1>
+        <dl>
+          <div><dt>Score</dt><dd id="score">0</dd></div>
+          <div><dt>Level</dt><dd id="level">1</dd></div>
+          <div><dt>Lines</dt><dd id="lines">0</dd></div>
+        </dl>
+        <div class="controls">
+          <button id="start" type="button" data-action="start">Start</button>
+          <button id="pause" type="button" data-action="pause">Pause</button>
+          <button id="restart" type="button" data-action="restart">Restart</button>
+        </div>
+        <p class="help">Arrows move, Up rotates, Space drops, P pauses, R restarts.</p>
+      </aside>
+    </main>
+  </body>
+</html>
+

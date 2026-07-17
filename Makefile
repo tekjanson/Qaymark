@@ -1,11 +1,12 @@
 SHELL := /bin/bash
 
-WORKSPACE ?=
+ROOT ?= $(WORKSPACE)
 TASK ?=
 MODEL ?=
 HARNESS_ARGS ?=
 
-.PHONY: help up down logs pull chat harness test hygiene gate install hooks clean
+.PHONY: help up down logs pull chat harness supervise dashboard test hygiene gate \
+	install hooks clean
 
 help:
 	@echo "Qaymark — local AI code-generation factory"
@@ -17,7 +18,10 @@ help:
 	@echo "  make hooks                     Enable the pre-commit hygiene hook"
 	@echo "  make chat PROMPT=\"...\"          One-off prompt via the Ollama API"
 	@echo "  make harness TASK=\"...\" \\"
-	@echo "       WORKSPACE=/path/to/dir     Run the guardrailed code harness"
+	@echo "       WORKSPACE=/path/to/dir     Run the guardrailed code harness once"
+	@echo "  make supervise TASK=\"...\" \\"
+	@echo "       WORKSPACE=/path/to/dir     Build then rebuild on every dashboard feedback"
+	@echo "  make dashboard ROOT=/path       Serve the signed-in control plane"
 	@echo "  make test                      Run the harness unit tests"
 	@echo "  make gate                      Run the strict hygiene gate on the repo"
 	@echo "  make hygiene PATH_ARG=dir      Run slop-be-gone against a path (needs sbg)"
@@ -47,6 +51,21 @@ harness:
 		--workspace "$(WORKSPACE)" \
 		$(if $(MODEL),--model $(MODEL),) \
 		$(HARNESS_ARGS)
+
+supervise:
+	@test -n "$(TASK)" || { echo "Usage: make supervise TASK=\"...\" WORKSPACE=/path"; exit 1; }
+	@test -n "$(WORKSPACE)" || { echo "Set WORKSPACE=/path/to/dir"; exit 1; }
+	python3 scripts/code_harness.py \
+		--task "$(TASK)" \
+		--workspace "$(WORKSPACE)" \
+		--supervise \
+		$(if $(MODEL),--model $(MODEL),) \
+		$(HARNESS_ARGS)
+
+dashboard:
+	@test -n "$(ROOT)" || { echo "Usage: make dashboard ROOT=/path"; exit 1; }
+	DASHBOARD_PASSWORD="$${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}" \
+	python3 scripts/dashboard.py "$(ROOT)" $(if $(PORT),--port $(PORT),)
 
 test:
 	PYTHONPATH="$(CURDIR)" python3 -m unittest discover -s tests -t . -v
