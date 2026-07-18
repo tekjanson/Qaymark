@@ -26,7 +26,7 @@ _EMPTY_PAYLOAD = json.dumps({"summary": "nothing", "operations": []})
 
 
 def _config(tmp: Path, attempts: int = 1) -> HarnessConfig:
-    config = HarnessConfig(task="add two numbers", workspace=tmp, use_idud=False)
+    config = HarnessConfig(task="add two numbers", workspace=tmp, use_reference=False)
     config.max_attempts = attempts
     return config
 
@@ -38,7 +38,7 @@ class LoopTests(unittest.TestCase):
     def _run(self, reply: str, attempts: int = 1) -> int:
         with mock.patch.object(loop, "chat", return_value=reply), mock.patch.object(
             loop, "ensure_slop_src", return_value=None
-        ), mock.patch.object(loop, "ensure_idud_binary", return_value=None):
+        ), mock.patch.object(loop, "ensure_drift_src", return_value=None):
             return loop.run_harness(_config(self.tmp, attempts))
 
     def test_clean_generation_passes(self) -> None:
@@ -55,9 +55,9 @@ class LoopTests(unittest.TestCase):
     def test_web_task_uses_browser_fallback_scaffold(self) -> None:
         with mock.patch.object(loop, "chat", return_value=_EMPTY_PAYLOAD), mock.patch.object(
             loop, "ensure_slop_src", return_value=None
-        ), mock.patch.object(loop, "ensure_idud_binary", return_value=None):
+        ), mock.patch.object(loop, "ensure_drift_src", return_value=None):
             config = HarnessConfig(
-                task="Build a browser Tetris game", workspace=self.tmp, use_idud=False
+                task="Build a browser Tetris game", workspace=self.tmp, use_reference=False
             )
             config.max_attempts = 1
             code = loop.run_harness(config)
@@ -74,8 +74,8 @@ class LoopTests(unittest.TestCase):
         long_task = "Create a module " + "x" * 200 + " with " + banned + " text"
         with mock.patch.object(loop, "chat", return_value=_EMPTY_PAYLOAD), mock.patch.object(
             loop, "ensure_slop_src", return_value=None
-        ), mock.patch.object(loop, "ensure_idud_binary", return_value=None):
-            config = HarnessConfig(task=long_task, workspace=self.tmp, use_idud=False)
+        ), mock.patch.object(loop, "ensure_drift_src", return_value=None):
+            config = HarnessConfig(task=long_task, workspace=self.tmp, use_reference=False)
             config.max_attempts = 1
             code = loop.run_harness(config)
         self.assertEqual(code, 0)

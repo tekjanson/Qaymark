@@ -1,4 +1,4 @@
-"""Orchestration: one-shot generation gated by hygiene + idud feedback."""
+"""Orchestration: one-shot generation gated by hygiene + reference feedback."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from pathlib import Path
 
 from .config import HarnessConfig
 from .hygiene import HygieneResult, fallback_scan, run_sbg
-from .idud_bridge import IdudResult, run_idud
 from .jsonio import extract_json_payload
 from .ollama_client import chat
 from .operations import apply_operations
 from .prompt import build_system_prompt, build_user_prompt, load_rule_digest, synthesize_feedback
-from .references import ensure_idud_binary, ensure_slop_src
+from .reference_bridge import ReferenceResult, run_map
+from .references import ensure_drift_src, ensure_slop_src
 from .report import AttemptReport
 from .workspace import ensure_sbgignore, iter_files, seed_workspace, summarize_workspace
 
@@ -24,7 +24,7 @@ from .workspace import ensure_sbgignore, iter_files, seed_workspace, summarize_w
 @dataclass
 class Tools:
     slop_src: Path | None
-    idud_binary: Path | None
+    drift_src: Path | None
 
 
 def _status_path(config: HarnessConfig) -> Path:
@@ -123,7 +123,7 @@ def _write_status(
                 "hygiene_passed": report.hygiene.passed,
                 "hygiene_degraded": report.hygiene.degraded,
                 "hygiene_violations": len(report.hygiene.violations),
-                "idud_available": report.idud.available,
+                "reference_available": report.reference.available,
                 "written": report.operations.written,
                 "skipped": report.operations.skipped,
             }
@@ -266,8 +266,8 @@ def fallback_operations(task: str) -> list[dict[str, object]]:
 
 def provision(config: HarnessConfig) -> Tools:
     slop_src = ensure_slop_src(config.cache_dir)
-    idud_binary = ensure_idud_binary(config.cache_dir) if config.use_idud else None
-    return Tools(slop_src=slop_src, idud_binary=idud_binary)
+    drift_src = ensure_drift_src(config.cache_dir) if config.use_reference else None
+    return Tools(slop_src=slop_src, drift_src=drift_src)
 
 
 def run_validation(root: Path, command: str) -> subprocess.CompletedProcess[str]:
@@ -318,11 +318,11 @@ def run_hygiene(config: HarnessConfig, tools: Tools) -> HygieneResult:
     return fallback_scan(config.workspace, iter_files(config.workspace))
 
 
-def run_reference(config: HarnessConfig, tools: Tools) -> IdudResult:
-    if tools.idud_binary is None:
-        return IdudResult(error="idud disabled or unavailable")
-    output = config.artifact_dir() / "idud_understanding.json"
-    return run_idud(tools.idud_binary, config.workspace, output)
+def run_reference(config: HarnessConfig, tools: Tools) -> ReferenceResult:
+    if tools.drift_src is None:
+        return ReferenceResult(error="drift reference disabled or unavailable")
+    output = config.artifact_dir() / "drift_understanding.json"
+    return run_map(tools.drift_src, config.workspace, output)
 
 
 def _generate(config: HarnessConfig, system: str, user: str) -> dict[str, object]:
@@ -347,7 +347,7 @@ def _persist(config: HarnessConfig, report: AttemptReport, payload: dict[str, ob
         "hygiene_passed": report.hygiene.passed,
         "hygiene_degraded": report.hygiene.degraded,
         "violation_count": len(report.hygiene.violations),
-        "idud_available": report.idud.available,
+        "reference_available": report.reference.available,
         "written": report.operations.written,
         "skipped": report.operations.skipped,
     }
@@ -366,10 +366,10 @@ def _attempt(
     ensure_sbgignore(config.workspace)
     validation = run_validation(config.workspace, config.validation_command)
     hygiene = run_hygiene(config, tools)
-    idud = run_reference(config, tools)
+    reference = run_reference(config, tools)
     validation_output = (validation.stdout + "\n" + validation.stderr).strip()
     ok = validation.returncode == 0
-    report = AttemptReport(attempt, ok, validation_output, hygiene, idud, outcome)
+    report = AttemptReport(attempt, ok, validation_output, hygiene, reference, outcome)
     _persist(config, report, payload)
     return report
 

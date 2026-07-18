@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from .hygiene import format_hygiene_feedback
-from .idud_bridge import format_idud_feedback
+from .reference_bridge import format_reference_feedback
 from .report import AttemptReport
 
 _SCHEMA = (
@@ -71,13 +71,13 @@ def _validation_section(report: AttemptReport) -> str:
 
 
 def synthesize_feedback(report: AttemptReport, root: object = None) -> str:
-    """Fuse validation, hygiene, and idud results into next-attempt feedback."""
+    """Fuse validation, hygiene, and reference results into next-attempt feedback."""
 
     parts = [
         f"Attempt {report.attempt} feedback:",
         _validation_section(report),
         format_hygiene_feedback(report.hygiene, root),
-        format_idud_feedback(report.idud),
+        format_reference_feedback(report.reference),
     ]
     if report.operations.skipped:
         skipped = "; ".join(report.operations.skipped[:6])

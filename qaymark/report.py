@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .hygiene import HygieneResult
-from .idud_bridge import IdudResult
+from .reference_bridge import ReferenceResult
 from .operations import OperationOutcome
 
 
@@ -15,7 +15,7 @@ class AttemptReport:
     validation_ok: bool
     validation_output: str
     hygiene: HygieneResult
-    idud: IdudResult
+    reference: ReferenceResult
     operations: OperationOutcome
 
     def passed(self) -> bool:

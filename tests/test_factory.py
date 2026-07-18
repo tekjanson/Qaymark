@@ -12,7 +12,7 @@ from qaymark.config import HarnessConfig
 
 
 def _config(tmp: Path) -> HarnessConfig:
-    config = HarnessConfig(task="demo", workspace=tmp, use_idud=False)
+    config = HarnessConfig(task="demo", workspace=tmp, use_reference=False)
     config.max_attempts = 1
     return config
 

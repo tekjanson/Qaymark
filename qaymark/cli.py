@@ -13,7 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qaymark",
         description="Guardrailed one-shot local code generation with Ollama, "
-        "gated by slop-be-gone hygiene rules and the idud reference.",
+        "gated by slop-be-gone hygiene rules and the drift-be-gone map.",
     )
     parser.add_argument("--task", required=True, help="Natural-language task to implement")
     parser.add_argument("--workspace", required=True, help="Directory to work in")
@@ -26,9 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=None, help="Ollama model name")
     parser.add_argument("--base-url", default=None, help="Ollama base URL")
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to sbg manifest")
-    parser.add_argument("--cache-dir", default=None, help="Cache dir for the sbg/idud tools")
+    parser.add_argument("--cache-dir", default=None, help="Cache dir for the sbg/drift tools")
     parser.add_argument("--allow-commands", action="store_true", help="Permit run_command ops")
-    parser.add_argument("--no-idud", action="store_true", help="Skip the idud reference bridge")
+    parser.add_argument(
+        "--no-reference", action="store_true", help="Skip the drift understanding map"
+    )
     parser.add_argument("--no-strict", action="store_true", help="Do not fail on hygiene warnings")
     parser.add_argument("--seed", default=None, help="Dir of spec/test files to plant (protected)")
     parser.add_argument("--starter", default=None, help="Dir of starter files to plant (editable)")
@@ -60,8 +62,8 @@ def config_from_args(args: argparse.Namespace) -> HarnessConfig:
         config.base_url = args.base_url
     if args.allow_commands:
         config.allow_commands = True
-    if args.no_idud:
-        config.use_idud = False
+    if args.no_reference:
+        config.use_reference = False
     if args.no_strict:
         config.strict = False
     if args.seed:

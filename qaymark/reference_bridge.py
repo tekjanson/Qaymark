@@ -1,16 +1,22 @@
-"""Reference bridge backed by the real idud understanding artifact."""
+"""Reference bridge backed by the drift-be-gone understanding map.
+
+Replaces the old idud Rust binary with a pure-Python sibling framework: it runs
+`drift map` over the workspace to produce the "what exists / what to touch"
+artifact the harness folds into feedback.
+"""
 
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 
 @dataclass
-class IdudResult:
+class ReferenceResult:
     available: bool = False
     summary: str = ""
     brief: str = ""
@@ -21,8 +27,8 @@ class IdudResult:
     error: str | None = None
 
 
-def _parse_artifact(artifact: dict[str, Any]) -> IdudResult:
-    return IdudResult(
+def _parse_artifact(artifact: dict[str, Any]) -> ReferenceResult:
+    return ReferenceResult(
         available=True,
         summary=str(artifact.get("summary", "")),
         brief=str(artifact.get("synthetic_brief", "")),
@@ -33,31 +39,42 @@ def _parse_artifact(artifact: dict[str, Any]) -> IdudResult:
     )
 
 
-def run_idud(binary: Path, workspace: Path, output_path: Path) -> IdudResult:
-    """Generate an idud understanding artifact for *workspace* and summarise it."""
+def run_map(drift_src: Path, workspace: Path, output_path: Path) -> ReferenceResult:
+    """Generate a drift understanding map for *workspace* and summarise it."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [str(binary), "understand-repo", "--repo-path", str(workspace)]
+    cmd = [sys.executable, "-m", "drift.cli", "map", str(workspace)]
     cmd += ["--output", str(output_path)]
+    env = {"PYTHONPATH": str(drift_src)}
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=300, check=False, env=_env(env)
+        )
     except (OSError, subprocess.SubprocessError) as exc:
-        return IdudResult(error=str(exc))
+        return ReferenceResult(error=str(exc))
     if result.returncode != 0:
-        return IdudResult(error=result.stderr[:300] or "idud understand-repo failed")
+        return ReferenceResult(error=result.stderr[:300] or "drift map failed")
     try:
         artifact = json.loads(output_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return IdudResult(error=f"could not read idud artifact: {exc}")
+        return ReferenceResult(error=f"could not read drift map: {exc}")
     return _parse_artifact(artifact)
 
 
-def format_idud_feedback(result: IdudResult) -> str:
+def _env(overrides: dict[str, str]) -> dict[str, str]:
+    import os
+
+    merged = dict(os.environ)
+    merged.update(overrides)
+    return merged
+
+
+def format_reference_feedback(result: ReferenceResult) -> str:
     if not result.available:
         detail = f" ({result.error})" if result.error else ""
-        return f"idud reference unavailable{detail}; proceed with structural care."
+        return f"drift reference unavailable{detail}; proceed with structural care."
     lines = [
-        "idud reference (what exists / what to touch):",
+        "drift reference (what exists / what to touch):",
         f"  - Summary: {result.summary}",
         f"  - Graph: {result.node_count} nodes, {result.edge_count} edges.",
     ]

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .config import HarnessConfig
 from .loop import run_harness
-from .references import ensure_idud_binary, ensure_slop_src
+from .references import ensure_drift_src, ensure_slop_src
 
 
 @dataclass
@@ -38,8 +38,8 @@ def _pre_provision(config: HarnessConfig) -> None:
     """Provision tools once in the parent so workers never race on git."""
 
     ensure_slop_src(config.cache_dir)
-    if config.use_idud:
-        ensure_idud_binary(config.cache_dir)
+    if config.use_reference:
+        ensure_drift_src(config.cache_dir)
     os.environ["QAYMARK_NO_REFRESH"] = "1"
 
 

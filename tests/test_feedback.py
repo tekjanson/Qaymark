@@ -46,12 +46,12 @@ class LoopFeedbackTests(unittest.TestCase):
     def test_external_feedback_is_folded_into_prompt(self) -> None:
         (self.tmp / ".harness").mkdir(parents=True, exist_ok=True)
         (self.tmp / ".harness" / "feedback.txt").write_text("make it cleaner", encoding="utf-8")
-        config = HarnessConfig(task="build a module", workspace=self.tmp, use_idud=False)
+        config = HarnessConfig(task="build a module", workspace=self.tmp, use_reference=False)
         config.max_attempts = 1
         with (
             mock.patch.object(loop, "chat", return_value=_EMPTY_PAYLOAD) as chat,
             mock.patch.object(loop, "ensure_slop_src", return_value=None),
-            mock.patch.object(loop, "ensure_idud_binary", return_value=None),
+            mock.patch.object(loop, "ensure_drift_src", return_value=None),
         ):
             code = loop.run_harness(config)
         self.assertEqual(code, 0)

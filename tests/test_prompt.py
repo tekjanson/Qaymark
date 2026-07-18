@@ -5,7 +5,7 @@ from pathlib import Path
 
 from qaymark.config import DEFAULT_MANIFEST
 from qaymark.hygiene import HygieneResult
-from qaymark.idud_bridge import IdudResult
+from qaymark.reference_bridge import ReferenceResult
 from qaymark.operations import OperationOutcome
 from qaymark.prompt import (
     build_system_prompt,
@@ -40,7 +40,7 @@ class PromptTests(unittest.TestCase):
 class FeedbackTests(unittest.TestCase):
     def _report(self, ok: bool, violations: list) -> AttemptReport:
         hygiene = HygieneResult(passed=not violations, violations=violations)
-        return AttemptReport(1, ok, "boom", hygiene, IdudResult(), OperationOutcome())
+        return AttemptReport(1, ok, "boom", hygiene, ReferenceResult(), OperationOutcome())
 
     def test_feedback_reports_validation_failure(self) -> None:
         text = synthesize_feedback(self._report(False, []))
