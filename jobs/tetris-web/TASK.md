@@ -1,74 +1,57 @@
 # Job: Playable web Tetris
 
-Build a **browser-playable** Tetris game. A human opens `index.html` from a
-static server and plays with the keyboard and buttons.
+Build the browser game logic in a single file **`game.js`** at the workspace
+root. A human opens `index.html` from a static server and plays with the
+keyboard and buttons; `app.js` renders your `game.js` to a canvas.
 
-The fixed acceptance tests must not be edited:
+## What to do
 
-- `test_webtetris.py` — the Python state/action seam (`webtetris.py`)
-- `test_game.mjs` — the browser game logic (`game.js`)
+Complete **`game.js` only** — overwrite it at the workspace root (do not create
+a `src/` folder, do not rename it). Every other file is already provided:
 
-Validate with:
+- `test_game.mjs` — the fixed Node acceptance tests for `game.js` (do not edit).
+- `app.js`, `index.html`, `styles.css` — the browser shell that uses `game.js`.
+- `webtetris.py`, `tetris.py`, `test_webtetris.py` — a separate Python seam,
+  already complete. Ignore them; do not touch them.
+
+Validate your `game.js` with:
 
 ```bash
-python3 -m unittest test_webtetris && node --test test_game.mjs && node --check app.js
+node --test test_game.mjs && node --check app.js
 ```
 
-## Files you must complete
+## game.js contract
 
-Overwrite these two files **at the workspace root** — use exactly these paths,
-do not create a `src/` folder or any subdirectory, and do not rename them:
+This is plain browser JavaScript (ES module, camelCase). Export `Tetris`,
+`gameState`, `applyAction`, and `SHAPES`.
 
-- `game.js` — the browser game logic (a `Tetris` class plus `gameState` and
-  `applyAction`), gated by `test_game.mjs`.
-- `webtetris.py` — the Python seam (`game_state`, `apply_action`) over the
-  seeded `tetris.py` core, gated by `test_webtetris.py`.
-
-The acceptance tests import `webtetris` and `./game.js` from the root, so the
-files must sit next to `test_webtetris.py` and `test_game.mjs`. Keep every line
-at or under 100 characters and keep nesting shallow (use small helpers and early
-returns), or the hygiene gate fails.
-
-`app.js`, `index.html`, and `styles.css` are provided as an editable starter
-that renders `game.js` to a canvas and wires keyboard + buttons. Keep them
-working; improve them if you like.
-
-## game.js contract (mirrors the Python core)
-
-Export `Tetris`, `gameState`, `applyAction`, and `SHAPES`.
-
-- `new Tetris(width = 10, height = 20, seed = 0)` — empty `board` (rows of ints,
-  `board[y][x]`, `y = 0` at the top), `score = 0`, `linesCleared = 0`,
-  `level = 1`, `gameOver = false`, `current = null`.
-- `spawn(kind)` — place one of `I,O,T,S,Z,J,L` at the top; each piece has 4 cells
-  with `min(y) === 0`; set `gameOver = true` if it cannot fit.
-- `move(dx, dy)` — shift `current` if every target cell is in bounds and empty;
-  return whether it moved.
-- `rotate()` — rotate `current` 90 degrees clockwise about its centre cell; `O`
-  never changes; return whether it rotated.
-- `clearLines()` — drop full rows, pad empty rows on top, update `linesCleared`,
-  `level = 1 + floor(linesCleared / 10)`, and `score` using
+- `new Tetris(width = 10, height = 20, seed = 0)` — `board` is `height` rows of
+  `width` ints (`board[y][x]`, `y = 0` at the top); `score = 0`,
+  `linesCleared = 0`, `level = 1`, `gameOver = false`, `current = null`.
+- `spawn(kind)` — place one of `I,O,T,S,Z,J,L` at the top; the piece has 4 cells
+  with `min(y) === 0`; set `gameOver = true` if it cannot fit; else set
+  `current` (an object with `.kind` and `.cells`, an array of `[x, y]` pairs).
+- `move(dx, dy)` — shift `current` if every target cell is in bounds and the
+  board is empty there; return whether it moved.
+- `rotate()` — rotate `current` 90 degrees clockwise about its centre cell;
+  `"O"` never changes (return true); return whether it rotated.
+- `clearLines()` — remove full rows, pad empty rows on top, update
+  `linesCleared`, `level = 1 + Math.floor(linesCleared / 10)`, and `score` using
   `{1:100, 2:300, 3:500, 4:800}` times `level`; return the count.
-- `hardDrop()` — fall until blocked, lock, clear lines, spawn the next piece.
+- `hardDrop()` — move down until blocked, lock the piece (board cells become 1),
+  clear lines, then spawn the next piece.
 - `tick()` — one gravity step: move down, or lock + clear + spawn when blocked.
 
 `gameState(game)` returns `{width, height, score, level, lines, gameOver,
-board}` where `board` is a fresh matrix with active-piece cells marked `2` and
+board}` where `board` is a fresh copy with active-piece cells set to `2` and
 locked cells `1`; the game's own board must not be mutated.
 
-`applyAction(game, action)` maps `left`, `right`, `down`, `rotate`, and `drop`
-to the methods above; any other action is a no-op.
+`applyAction(game, action)` maps `"left"`, `"right"`, `"down"`, `"rotate"`, and
+`"drop"` to the methods above; any other action is a no-op.
 
-## webtetris.py contract
+## Style constraints (strict hygiene gate)
 
-`game_state(tetris)` returns the same snapshot shape (keys `width`, `height`,
-`score`, `level`, `lines`, `game_over`, `board`) over the seeded `tetris.py`
-core, active cells `2`, locked `1`, no mutation. `apply_action(tetris, action)`
-maps `left`, `right`, `down`, `rotate`, `drop`; other actions are a no-op.
-
-## Constraints
-
-Everything must pass the strict slop-be-gone gate: functions small, lines <= 100
-chars, a single final newline, no placeholder comments or deferred-work markers,
-no eval, no debug artifacts. Every HTML button needs a `data-action` or
-`onclick`. Decompose into small helpers.
+Keep every line at or under 100 characters, keep functions small and nesting
+shallow (use small helpers and early returns), end the file with a single
+newline, and use no placeholder comments, no deferred-work markers, and no
+`eval`. Follow the structure already sketched in the `game.js` starter.
