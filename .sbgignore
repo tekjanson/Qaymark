@@ -1,5 +1,7 @@
 # The hygiene rules file necessarily contains marker tokens as patterns.
 sbg_manifest.json
+# Sibling-framework manifests follow their own rule-definition convention.
+frameworks/
 # Local model runtime and WebUI data (not source).
 data/
 ollama/

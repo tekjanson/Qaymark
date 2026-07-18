@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "ci-present",
+      "type": "ci-present",
+      "enabled": true,
+      "severity": "error",
+      "description": "Every repo runs automated checks in CI.",
+      "what": "Flags repos with no workflow under .github/workflows.",
+      "why": "CI is the enforcement backstop that keeps standards from drifting.",
+      "source_refs": ["chaos-be-gone/ci-present"]
+    },
+    {
+      "id": "hooks-configured",
+      "type": "hooks-configured",
+      "enabled": true,
+      "severity": "error",
+      "description": "Version-controlled git hooks ship with the repo.",
+      "what": "Flags repos without a non-empty .githooks directory.",
+      "why": "Committed hooks make local gates reviewable and unbypassable.",
+      "source_refs": ["chaos-be-gone/hooks-configured"]
+    },
+    {
+      "id": "gitignore-present",
+      "type": "gitignore-present",
+      "enabled": true,
+      "severity": "error",
+      "description": "A gitignore keeps build junk and secrets out of history.",
+      "what": "Flags repos with no .gitignore at the root.",
+      "why": "One ignore file prevents accidental commits of local state.",
+      "source_refs": ["chaos-be-gone/gitignore-present"]
+    },
+    {
+      "id": "readme-present",
+      "type": "readme-present",
+      "enabled": true,
+      "severity": "error",
+      "description": "A README states what the repo is and how to run it.",
+      "what": "Flags repos with no README at the root.",
+      "why": "An entry-point document keeps the workflow discoverable.",
+      "source_refs": ["chaos-be-gone/readme-present"]
+    },
+    {
+      "id": "no-workflow-secrets",
+      "type": "no-workflow-secrets",
+      "enabled": true,
+      "severity": "error",
+      "description": "Workflow files never carry hardcoded secrets.",
+      "what": "Flags private keys, AWS keys, or literal credentials in workflows.",
+      "why": "Secrets belong in a vault, never in version-controlled CI.",
+      "source_refs": ["chaos-be-gone/no-workflow-secrets"]
+    }
+  ]
+}
