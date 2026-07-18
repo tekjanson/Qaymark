@@ -1,7 +1,7 @@
 // Browser Tetris game logic — starter scaffold.
-// The harness completes each method body so test_game.mjs passes.
-// Coordinates: board[y][x], y=0 is the top row, y grows downward. Piece cells
-// are absolute [x, y] pairs. Keep every line <= 100 chars.
+// The mechanical helpers below are done. Complete each method that throws
+// "not built yet" so test_game.mjs passes. Coordinates: board[y][x], y=0 top,
+// y grows downward. Piece cells are absolute [x, y] pairs. Lines <= 100 chars.
 
 const WIDTH = 10;
 const HEIGHT = 20;
@@ -33,48 +33,76 @@ export class Tetris {
     this.level = 1;
     this.gameOver = false;
     this.current = null;
-    this._seed = seed;
+    this._seed = seed >>> 0;
+  }
+
+  _rand() {
+    this._seed = (1664525 * this._seed + 1013904223) >>> 0;
+    return this._seed / 0x100000000;
+  }
+
+  _choice(keys) {
+    return keys[Math.floor(this._rand() * keys.length)];
   }
 
   _shape(kind) {
-    throw new Error("not built yet: return spawn cells for kind, min y == 0");
+    const cells = SHAPES[kind];
+    const minY = Math.min(...cells.map(([, y]) => y));
+    const offset = Math.floor((this.width - cells.length) / 2);
+    return cells.map(([x, y]) => [x + offset, y - minY]);
   }
 
   _fits(cells) {
-    throw new Error("not built yet: every cell in bounds and board empty");
+    return cells.every(
+      ([x, y]) => x >= 0 && x < this.width && y >= 0 && y < this.height && this.board[y][x] === 0,
+    );
+  }
+
+  _lock() {
+    for (const [x, y] of this.current.cells) {
+      this.board[y][x] = 1;
+    }
+  }
+
+  _fullRows() {
+    const rows = [];
+    for (let y = 0; y < this.height; y += 1) {
+      if (this.board[y].every((cell) => cell !== 0)) rows.push(y);
+    }
+    return rows;
   }
 
   spawn(kind) {
-    throw new Error("not built yet: place a piece, set gameOver if it cannot fit");
+    throw new Error("not built yet: use _shape; set current or gameOver via _fits");
   }
 
   move(dx, dy) {
-    throw new Error("not built yet: shift current if it fits, return moved?");
+    throw new Error("not built yet: shift current cells by (dx,dy) if _fits; return moved?");
   }
 
   rotate() {
-    throw new Error("not built yet: rotate clockwise; O is a no-op");
+    throw new Error("not built yet: rotate about centre cell; O returns true; apply if _fits");
   }
 
   clearLines() {
-    throw new Error("not built yet: clear full rows, update score/level/lines");
+    throw new Error("not built yet: drop _fullRows, pad top, update lines/level/score, return n");
   }
 
   hardDrop() {
-    throw new Error("not built yet: fall, lock, clearLines, spawn next");
+    throw new Error("not built yet: move(0,1) until blocked, _lock, clearLines, spawn next");
   }
 
   tick() {
-    throw new Error("not built yet: one gravity step or lock+clear+spawn");
+    throw new Error("not built yet: move(0,1) else _lock + clearLines + spawn");
   }
 }
 
 export function gameState(game) {
-  throw new Error("not built yet: snapshot with active=2, locked=1, no mutation");
+  throw new Error("not built yet: copy board, mark active cells 2 (locked stay 1), no mutation");
 }
 
 export function applyAction(game, action) {
-  throw new Error("not built yet: map left/right/down/rotate/drop to methods");
+  throw new Error("not built yet: left/right/down/rotate/drop -> methods; else no-op");
 }
 
 export const CONSTANTS = { WIDTH, HEIGHT, Piece };
