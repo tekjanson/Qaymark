@@ -20,6 +20,7 @@ TEXT_EXTENSIONS = frozenset(
         ".cfg",
         ".sh",
         ".js",
+        ".mjs",
         ".ts",
         ".html",
         ".css",

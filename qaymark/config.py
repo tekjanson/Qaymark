@@ -12,6 +12,11 @@ DEFAULT_MANIFEST = REPO_ROOT / "sbg_manifest.json"
 SLOP_REPO_URL = "https://github.com/spamApply1/slop-be-gone"
 IDUD_REPO_URL = "https://github.com/tekjanson/idud"
 
+# The spamApply1 standards ecosystem — one framework per concern. slop-be-gone
+# gates code hygiene; these siblings extend enforcement to design and workflow.
+DESIGN_REPO_URL = "https://github.com/spamApply1/design-be-gone"
+WORKFLOW_REPO_URL = "https://github.com/spamApply1/chaos-be-gone"
+
 ARTIFACT_DIR_NAME = ".harness"
 IGNORE_NAMES = frozenset(
     {

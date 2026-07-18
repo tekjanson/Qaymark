@@ -70,7 +70,7 @@ Then keep the public methods tiny:
 
 ## Constraints
 
-- Everything must pass the strict slop-be-gone gate: functions ≤ 60 lines, ≤ 5
+- Everything must pass the strict slop-be-gone gate: functions ≤ 45 lines, ≤ 5
   arguments, ≤ 4 levels of nesting, lines ≤ 100 chars, a single final newline,
   no placeholder comments, no `eval`/`exec`, no bare/broad `except`, no mutable
   default arguments. Decompose into small helper methods.

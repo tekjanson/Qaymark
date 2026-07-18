@@ -31,6 +31,24 @@ Two layers:
 The same hygiene gate runs as a **git pre-commit hook and in CI**, so the rules
 apply to hand-written code too — see [Guardrails](#guardrails).
 
+## The standards ecosystem
+
+Qaymark is meant to run **Ollama-only** and, once pointed at a job, keep
+improving on its own. The quality bar is a growing family of manifest-driven
+enforcement frameworks under [spamApply1](https://github.com/spamApply1) — one
+repo per concern, each with the same `check --manifest --json --strict` CLI:
+
+- **[slop-be-gone](https://github.com/spamApply1/slop-be-gone)** — code hygiene.
+- **[design-be-gone](https://github.com/spamApply1/design-be-gone)** — design
+  consistency (no inline styles, one `<h1>`, one filename case, bounded exports).
+- **[chaos-be-gone](https://github.com/spamApply1/chaos-be-gone)** — workflow
+  sanity (CI present, hooks wired, gitignore/README, no secrets in workflows).
+
+The goal is to keep pushing enforcement outward — code, design, workflow — until
+intent itself is an executable standard, so there is essentially one canonical
+way for anything to exist.
+
+
 ## Requirements
 
 - Docker + Docker Compose v2
@@ -141,7 +159,7 @@ tightened thresholds — the "fractal consistency" policy:
 - Lines ≤ 100 chars; a single final newline; no trailing whitespace
 - No merge markers, committed secrets, or leftover debug artifacts
 - Python AST rigor: no bare/broad `except`, no mutable defaults, no `eval`/`exec`
-- Small, flat functions: ≤ 60 lines, ≤ 5 arguments, ≤ 4 levels of nesting
+- Small, flat functions: ≤ 45 lines, ≤ 5 arguments, ≤ 4 levels of nesting
 
 Validate it against the real engine:
 

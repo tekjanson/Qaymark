@@ -16,12 +16,15 @@ if [[ -d "$FMT_BIN" ]]; then
   export PATH="${FMT_BIN}:${PATH}"
 fi
 
+VALIDATE="python3 -m unittest test_webtetris"
+VALIDATE="${VALIDATE} && node --test test_game.mjs && node --check app.js"
+
 python3 scripts/code_harness.py \
   --task "$(cat jobs/tetris-web/TASK.md)" \
   --seed jobs/tetris-web/seed \
   --starter jobs/tetris-web/starter \
   --workspace "$WORKSPACE" \
-  --validation-command "python3 -m unittest test_webtetris" \
+  --validation-command "$VALIDATE" \
   --workers "$WORKERS" \
   --max-attempts "$ATTEMPTS" \
   --model "$MODEL"

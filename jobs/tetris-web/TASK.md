@@ -1,60 +1,57 @@
 # Job: Playable web Tetris
 
-Build a browser-playable Tetris game in `index.html`, `app.js`, `styles.css`,
-and `webtetris.py`.
+Build the browser game logic in a single file **`game.js`** at the workspace
+root. A human opens `index.html` from a static server and plays with the
+keyboard and buttons; `app.js` renders your `game.js` to a canvas.
 
-The fixed acceptance tests live in `seed/test_webtetris.py` and must not be
-edited. Run them with:
+## What to do
+
+Complete **`game.js` only** — overwrite it at the workspace root (do not create
+a `src/` folder, do not rename it). Every other file is already provided:
+
+- `test_game.mjs` — the fixed Node acceptance tests for `game.js` (do not edit).
+- `app.js`, `index.html`, `styles.css` — the browser shell that uses `game.js`.
+- `webtetris.py`, `tetris.py`, `test_webtetris.py` — a separate Python seam,
+  already complete. Ignore them; do not touch them.
+
+Validate your `game.js` with:
 
 ```bash
-python3 -m unittest test_webtetris
+node --test test_game.mjs && node --check app.js
 ```
 
-## Goal
+## game.js contract
 
-Ship a clean, human-playable Tetris UI that can be opened from a local static
-server. The Python seam powers the acceptance tests; the browser game must use
-the same rules and controls.
+This is plain browser JavaScript (ES module, camelCase). Export `Tetris`,
+`gameState`, `applyAction`, and `SHAPES`.
 
-## Required files
+- `new Tetris(width = 10, height = 20, seed = 0)` — `board` is `height` rows of
+  `width` ints (`board[y][x]`, `y = 0` at the top); `score = 0`,
+  `linesCleared = 0`, `level = 1`, `gameOver = false`, `current = null`.
+- `spawn(kind)` — place one of `I,O,T,S,Z,J,L` at the top; the piece has 4 cells
+  with `min(y) === 0`; set `gameOver = true` if it cannot fit; else set
+  `current` (an object with `.kind` and `.cells`, an array of `[x, y]` pairs).
+- `move(dx, dy)` — shift `current` if every target cell is in bounds and the
+  board is empty there; return whether it moved.
+- `rotate()` — rotate `current` 90 degrees clockwise about its centre cell;
+  `"O"` never changes (return true); return whether it rotated.
+- `clearLines()` — remove full rows, pad empty rows on top, update
+  `linesCleared`, `level = 1 + Math.floor(linesCleared / 10)`, and `score` using
+  `{1:100, 2:300, 3:500, 4:800}` times `level`; return the count.
+- `hardDrop()` — move down until blocked, lock the piece (board cells become 1),
+  clear lines, then spawn the next piece.
+- `tick()` — one gravity step: move down, or lock + clear + spawn when blocked.
 
-- `webtetris.py` — state/action helpers for the tests
-- `index.html` — page shell with the board, HUD, and controls
-- `app.js` — browser game loop, input handling, and rendering
-- `styles.css` — layout and visual polish
+`gameState(game)` returns `{width, height, score, level, lines, gameOver,
+board}` where `board` is a fresh copy with active-piece cells set to `2` and
+locked cells `1`; the game's own board must not be mutated.
 
-## Python seam
+`applyAction(game, action)` maps `"left"`, `"right"`, `"down"`, `"rotate"`, and
+`"drop"` to the methods above; any other action is a no-op.
 
-Export these helpers from `webtetris.py`:
+## Style constraints (strict hygiene gate)
 
-- `game_state(tetris)` — return a JSON-friendly snapshot of the game
-- `apply_action(tetris, action)` — apply one action such as `left`, `right`,
-  `down`, `rotate`, `drop`, `start`, `pause`, or `restart`
-
-The snapshot must include:
-
-- `width`, `height`, `score`, `level`, `lines`, `game_over`
-- `board` as a 20x10 matrix of ints
-
-Use `1` for locked cells and `2` for the active falling piece. Do not mutate the
-underlying board when building the snapshot.
-
-## Browser behavior
-
-- Arrow keys move the piece.
-- ArrowUp rotates.
-- Space hard-drops.
-- `P` pauses and resumes.
-- `R` restarts.
-- The board, score, level, and lines are always visible.
-- Game over is shown in the UI and the player can restart without reloading.
-
-## Acceptance bar
-
-The solution passes when:
-
-- the Python seam tests pass,
-- the HTML/JS/CSS files exist and wire up the playable UI,
-- the code stays inside the strict hygiene gate,
-- the browser game is actually usable from a local static server.
-
+Keep every line at or under 100 characters, keep functions small and nesting
+shallow (use small helpers and early returns), end the file with a single
+newline, and use no placeholder comments, no deferred-work markers, and no
+`eval`. Follow the structure already sketched in the `game.js` starter.

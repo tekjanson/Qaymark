@@ -49,6 +49,58 @@ def _merge_feedback(primary: str | None, secondary: str | None) -> str | None:
     return primary or secondary
 
 
+def _rules_path(config: HarnessConfig) -> Path:
+    return config.artifact_dir() / "rules.md"
+
+
+def _load_rules(config: HarnessConfig) -> str | None:
+    """Durable, human-defined standards folded into the system prompt."""
+
+    path = _rules_path(config)
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    return text or None
+
+
+def _augment_system_with_rules(config: HarnessConfig, system: str) -> str:
+    rules = _load_rules(config)
+    if not rules:
+        return system
+    return (
+        f"{system}\n\nDurable project rules defined by the operator — always "
+        f"follow these, they override defaults:\n{rules}"
+    )
+
+
+def _build_count_path(config: HarnessConfig) -> Path:
+    return config.artifact_dir() / "build_count"
+
+
+def _bump_build_count(config: HarnessConfig) -> int:
+    path = _build_count_path(config)
+    current = 0
+    if path.exists():
+        try:
+            current = int(path.read_text(encoding="utf-8").strip() or "0")
+        except ValueError:
+            current = 0
+    current += 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(current), encoding="utf-8")
+    return current
+
+
+def _read_build_count(config: HarnessConfig) -> int:
+    path = _build_count_path(config)
+    if not path.exists():
+        return 0
+    try:
+        return int(path.read_text(encoding="utf-8").strip() or "0")
+    except ValueError:
+        return 0
+
+
 def _write_status(
     config: HarnessConfig,
     phase: str,
@@ -61,6 +113,7 @@ def _write_status(
         "workspace": str(config.workspace),
         "attempt": attempt,
         "max_attempts": config.max_attempts,
+        "build": _read_build_count(config),
     }
     if report is not None:
         payload.update(
@@ -223,9 +276,10 @@ def run_validation(root: Path, command: str) -> subprocess.CompletedProcess[str]
     )
 
 
-def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> None:
-    """Run black on generated Python files (if available) so style is deterministic."""
+_PRETTIER_SUFFIXES = (".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx", ".css", ".html", ".json")
 
+
+def _format_python(root: Path, written: list[str], protected: frozenset[str]) -> None:
     black = shutil.which("black")
     if black is None:
         return
@@ -234,6 +288,28 @@ def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> Non
         return
     cmd = [black, "-q", "-l", "100", *targets]
     subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=120, check=False)
+
+
+def _format_web(root: Path, written: list[str], protected: frozenset[str]) -> None:
+    prettier = shutil.which("prettier")
+    if prettier is None:
+        return
+    targets = [f for f in written if f.endswith(_PRETTIER_SUFFIXES) and f not in protected]
+    if not targets:
+        return
+    cmd = [prettier, "--write", "--print-width", "100", *targets]
+    subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=120, check=False)
+
+
+def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> None:
+    """Auto-format generated files so style is deterministic before the gate.
+
+    Python is formatted with black and web assets (JS/TS/CSS/HTML/JSON) with
+    prettier when those tools are on PATH; missing tools are skipped silently.
+    """
+
+    _format_python(root, written, protected)
+    _format_web(root, written, protected)
 
 
 def run_hygiene(config: HarnessConfig, tools: Tools) -> HygieneResult:
@@ -307,6 +383,7 @@ def run_harness(config: HarnessConfig) -> int:
     ensure_sbgignore(config.workspace)
     tools = provision(config)
     system = build_system_prompt(load_rule_digest(config.manifest_path))
+    system = _augment_system_with_rules(config, system)
     feedback: str | None = None
     _write_status(config, "starting")
 
@@ -321,6 +398,7 @@ def run_harness(config: HarnessConfig) -> int:
             feedback = f"Attempt {attempt} did not finish ({exc}). Regenerate a complete file."
             continue
         if report.passed():
+            _bump_build_count(config)
             _write_status(config, "passed", attempt, report)
             print(f"✅ guardrails passed on attempt {attempt}", flush=True)
             return 0
