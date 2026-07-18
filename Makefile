@@ -5,7 +5,7 @@ TASK ?=
 MODEL ?=
 HARNESS_ARGS ?=
 
-.PHONY: help up down logs pull chat harness supervise dashboard test hygiene gate \
+.PHONY: help up down logs pull chat harness supervise dashboard play test hygiene gate \
 	install hooks clean
 
 help:
@@ -22,6 +22,7 @@ help:
 	@echo "  make supervise TASK=\"...\" \\"
 	@echo "       WORKSPACE=/path/to/dir     Build then rebuild on every dashboard feedback"
 	@echo "  make dashboard ROOT=/path       Serve the signed-in control plane"
+	@echo "  make play WORKSPACE=/path       Serve a built game if it passes"
 	@echo "  make test                      Run the harness unit tests"
 	@echo "  make gate                      Run the strict hygiene gate on the repo"
 	@echo "  make hygiene PATH_ARG=dir      Run slop-be-gone against a path (needs sbg)"
@@ -66,6 +67,10 @@ dashboard:
 	@test -n "$(ROOT)" || { echo "Usage: make dashboard ROOT=/path"; exit 1; }
 	DASHBOARD_PASSWORD="$${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}" \
 	python3 scripts/dashboard.py "$(ROOT)" $(if $(PORT),--port $(PORT),)
+
+play:
+	@test -n "$(WORKSPACE)" || { echo "Usage: make play WORKSPACE=/path"; exit 1; }
+	python3 scripts/play.py "$(WORKSPACE)" $(if $(PORT),--port $(PORT),)
 
 test:
 	PYTHONPATH="$(CURDIR)" python3 -m unittest discover -s tests -t . -v

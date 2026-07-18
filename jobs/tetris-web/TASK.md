@@ -31,6 +31,9 @@ This is plain browser JavaScript (ES module, camelCase). Export `Tetris`,
 - `spawn(kind)` — place one of `I,O,T,S,Z,J,L` at the top; the piece has 4 cells
   with `min(y) === 0`; set `gameOver = true` if it cannot fit; else set
   `current` (an object with `.kind` and `.cells`, an array of `[x, y]` pairs).
+  When `kind` is omitted, pick one with the provided `this._choice(...)` helper.
+  This is JavaScript: there is no `random` global — never call `random(...)`;
+  use the provided `this._rand()` / `this._choice()` or `Math.random()`.
 - `move(dx, dy)` — shift `current` if every target cell is in bounds and the
   board is empty there; return whether it moved.
 - `rotate()` — rotate `current` 90 degrees clockwise about its centre cell;
