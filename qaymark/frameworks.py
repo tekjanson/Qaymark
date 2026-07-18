@@ -35,6 +35,8 @@ class Framework:
     description: str
     manifest: Path
     repo: str
+    domain: str
+    scope: str
 
 
 FRAMEWORKS: tuple[Framework, ...] = (
@@ -44,6 +46,8 @@ FRAMEWORKS: tuple[Framework, ...] = (
         "Code hygiene: placeholders, markers, size, secrets, and AST rigor.",
         REPO_ROOT / "sbg_manifest.json",
         "https://github.com/spamApply1/slop-be-gone",
+        "hygiene",
+        "single-file",
     ),
     Framework(
         "design-be-gone",
@@ -51,6 +55,8 @@ FRAMEWORKS: tuple[Framework, ...] = (
         "Design consistency: styling, headings, filename case, module surface.",
         REPO_ROOT / "frameworks" / "design-be-gone.json",
         "https://github.com/spamApply1/design-be-gone",
+        "design",
+        "ui-markup",
     ),
     Framework(
         "chaos-be-gone",
@@ -58,6 +64,17 @@ FRAMEWORKS: tuple[Framework, ...] = (
         "Workflow sanity: CI, hooks, gitignore, README, and workflow secrets.",
         REPO_ROOT / "frameworks" / "chaos-be-gone.json",
         "https://github.com/spamApply1/chaos-be-gone",
+        "workflow",
+        "repo-structure",
+    ),
+    Framework(
+        "drift-be-gone",
+        "drift-be-gone",
+        "Architecture: cycles, layering, forbidden deps, orphans, and the map.",
+        REPO_ROOT / "frameworks" / "drift-be-gone.json",
+        "https://github.com/spamApply1/drift-be-gone",
+        "architecture",
+        "cross-module",
     ),
 )
 
@@ -108,12 +125,43 @@ def list_frameworks() -> list[dict]:
                 "name": framework.name,
                 "description": framework.description,
                 "repo": framework.repo,
+                "domain": framework.domain,
+                "scope": framework.scope,
                 "rule_count": len(views),
                 "enabled_count": sum(1 for view in views if view["enabled"]),
                 "rules": views,
             }
         )
     return out
+
+
+def check_overlap() -> list[str]:
+    """Assert the cluster's frameworks stay in their lanes.
+
+    Vibing governance: two frameworks must never define the same rule id, claim
+    the same domain, or claim the same scope. slop-be-gone owns single-file
+    hygiene; drift-be-gone owns cross-module architecture; they must not blur.
+    """
+
+    problems: list[str] = []
+    rule_owner: dict[str, str] = {}
+    domain_owner: dict[str, str] = {}
+    scope_owner: dict[str, str] = {}
+    for framework in FRAMEWORKS:
+        _claim(domain_owner, framework.domain, framework.fid, "domain", problems)
+        _claim(scope_owner, framework.scope, framework.fid, "scope", problems)
+        manifest = json.loads(framework.manifest.read_text(encoding="utf-8"))
+        for rule in manifest.get("rules", []):
+            rid = rule.get("id", rule.get("type", ""))
+            _claim(rule_owner, rid, framework.fid, "rule id", problems)
+    return problems
+
+
+def _claim(owner: dict[str, str], key: str, fid: str, label: str, problems: list[str]) -> None:
+    if key in owner and owner[key] != fid:
+        problems.append(f"{label} '{key}' claimed by both {owner[key]} and {fid}")
+    else:
+        owner[key] = fid
 
 
 def _coerce_change(key: str, value: object) -> object:

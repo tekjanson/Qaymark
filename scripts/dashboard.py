@@ -492,6 +492,8 @@ GOVERNANCE_SHELL = """<!doctype html>
         const rules = f.rules.map((r) => ruleRow(f.id, r)).join('');
         return '<div class="fw" data-fw="' + f.id + '">'
           + '<div class="fw-head"><div><strong>' + f.name + '</strong>'
+          + '<span class="pill">' + f.domain + '</span>'
+          + '<span class="pill">scope: ' + f.scope + '</span>'
           + '<span class="muted"> — ' + f.description + '</span></div>'
           + '<div class="count muted">' + f.enabled_count + '/' + f.rule_count
           + ' enabled &middot; <a href="' + f.repo + '" target="_blank">repo</a></div></div>'
@@ -503,8 +505,12 @@ GOVERNANCE_SHELL = """<!doctype html>
         const data = await res.json();
         const total = data.frameworks.reduce((a, f) => a + f.rule_count, 0);
         const on = data.frameworks.reduce((a, f) => a + f.enabled_count, 0);
+        const overlap = data.overlap || [];
+        const governance = overlap.length
+          ? '<span class="bad">overlap: ' + overlap.join('; ') + '</span>'
+          : '<span class="ok">no overlap &mdash; every framework owns its lane</span>';
         document.getElementById('summary').innerHTML = data.frameworks.length
-          + ' frameworks &middot; ' + on + '/' + total + ' rules enabled';
+          + ' frameworks &middot; ' + on + '/' + total + ' rules enabled &middot; ' + governance;
         document.getElementById('frameworks').innerHTML =
           data.frameworks.map(frameworkCard).join('');
       }
@@ -803,6 +809,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, root: Path, **kwargs):
         self.root = root
         super().__init__(*args, directory=str(root), **kwargs)
+
     def _send(self, status: int, content_type: str, body: bytes) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -832,7 +839,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def _serve_api(self, path: str, username: str) -> bool:
         if path == "/api/frameworks.json":
-            body = json.dumps({"frameworks": fw.list_frameworks()}, indent=2).encode("utf-8")
+            payload = {"frameworks": fw.list_frameworks(), "overlap": fw.check_overlap()}
+            body = json.dumps(payload, indent=2).encode("utf-8")
         elif path == "/api/overview.json":
             body = json.dumps(overview(self.root, username), indent=2).encode("utf-8")
         else:

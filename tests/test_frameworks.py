@@ -32,7 +32,9 @@ class FrameworksTests(unittest.TestCase):
         }
         self.path = self.tmp / "demo.json"
         self.path.write_text(json.dumps(manifest), encoding="utf-8")
-        self.framework = fw.Framework("demo", "demo", "d", self.path, "https://example/demo")
+        self.framework = fw.Framework(
+            "demo", "demo", "d", self.path, "https://example/demo", "demo-domain", "demo-scope"
+        )
         self._patch = mock.patch.object(fw, "_BY_ID", {"demo": self.framework})
         self._patch.start()
 
@@ -80,9 +82,22 @@ class RealManifestTests(unittest.TestCase):
     def test_all_frameworks_load(self) -> None:
         data = fw.list_frameworks()
         ids = {f["id"] for f in data}
-        self.assertEqual(ids, {"slop-be-gone", "design-be-gone", "chaos-be-gone"})
+        self.assertEqual(ids, {"slop-be-gone", "design-be-gone", "chaos-be-gone", "drift-be-gone"})
         for framework in data:
             self.assertGreater(framework["rule_count"], 0)
+            self.assertTrue(framework["domain"])
+            self.assertTrue(framework["scope"])
+
+    def test_cluster_has_no_overlap(self) -> None:
+        # Vibing governance: slop owns single-file hygiene, drift owns
+        # cross-module architecture; no framework may blur into another.
+        self.assertEqual(fw.check_overlap(), [])
+
+    def test_overlap_detected_when_domains_collide(self) -> None:
+        clone = fw.Framework("dup", "dup", "d", fw.FRAMEWORKS[0].manifest, "u", "hygiene", "other")
+        with mock.patch.object(fw, "FRAMEWORKS", fw.FRAMEWORKS + (clone,)):
+            problems = fw.check_overlap()
+        self.assertTrue(any("domain 'hygiene'" in p for p in problems))
 
 
 if __name__ == "__main__":
