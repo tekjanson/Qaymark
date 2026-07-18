@@ -149,7 +149,7 @@ HTML_SHELL = """<!doctype html>
             : '<span class="bad">failed</span>';
           return [
             '<tr>',
-            `<td><a href="${item.link}">${item.name}</a></td>`,
+            `<td><a href="${item.console}">${item.name}</a></td>`,
             `<td>${item.phase}</td>`,
             `<td>${item.attempt}</td>`,
             `<td>${validation}</td>`,
@@ -235,6 +235,145 @@ LOGIN_SHELL = """<!doctype html>
         </form>
       </section>
     </main>
+  </body>
+</html>
+"""
+
+
+CONSOLE_SHELL = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Qaymark Console</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+      main { max-width: 1300px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+      .card { background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 16px; }
+      .cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      a { color: #93c5fd; }
+      h1, h2 { margin: 0 0 8px; }
+      iframe { width: 100%; height: 680px; border: 0; border-radius: 12px; background: #020617; }
+      textarea { width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid
+        #334155; padding: 10px; font: inherit; background: #0b1220; color: inherit; }
+      button { border: 0; border-radius: 10px; padding: 10px 12px; font: inherit;
+        background: #8b5cf6; color: white; cursor: pointer; margin-top: 8px; }
+      .muted { color: #94a3b8; }
+      .ok { color: #86efac; }
+      .bad { color: #fca5a5; }
+      .pill { display: inline-block; padding: 2px 10px; border-radius: 999px;
+        border: 1px solid #334155; margin-right: 6px; }
+      ul { margin: 8px 0 0; padding-left: 18px; }
+      .note { min-height: 1.1rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h1 id="title">Qaymark Console</h1>
+          <a href="/">Back to overview</a>
+        </div>
+        <div id="status" class="muted">Loading...</div>
+      </div>
+      <div class="cols">
+        <div class="card">
+          <h2>Live preview</h2>
+          <div id="preview-wrap" class="muted">No preview for this workspace.</div>
+        </div>
+        <div>
+          <div class="card">
+            <h2>Say what you don't like</h2>
+            <p class="muted">Feedback triggers a rebuild. The preview refreshes itself.</p>
+            <textarea id="feedback" rows="4" placeholder="e.g. make the board bigger"></textarea>
+            <button id="send-feedback" data-action="feedback">Send feedback</button>
+            <div id="feedback-note" class="note muted"></div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h2>Define a rule</h2>
+            <p class="muted">Rules are durable and enforced on every future build.</p>
+            <textarea id="rule" rows="2" placeholder="e.g. always add a header comment"></textarea>
+            <button id="add-rule" data-action="rule">Add rule</button>
+            <div id="rule-note" class="note muted"></div>
+            <ul id="rules"></ul>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script>
+      const ws = new URLSearchParams(location.search).get('ws') || '';
+      let lastBuild = -1;
+      document.getElementById('title').textContent = 'Console: ' + ws;
+
+      function renderPreview(item) {
+        const wrap = document.getElementById('preview-wrap');
+        if (!item.has_preview) {
+          wrap.innerHTML = '<span class="muted">No index.html in this workspace yet.</span>';
+          return;
+        }
+        if (item.build !== lastBuild) {
+          lastBuild = item.build;
+          const src = '/' + ws + '/index.html?v=' + item.build;
+          wrap.innerHTML = '<iframe id="preview" src="' + src + '"></iframe>';
+        }
+      }
+
+      function renderStatus(item) {
+        const val = item.validation_ok ? '<span class="ok">tests pass</span>'
+          : '<span class="bad">tests failing</span>';
+        const hyg = item.hygiene_passed ? '<span class="ok">hygiene pass</span>'
+          : '<span class="bad">hygiene failing</span>';
+        document.getElementById('status').innerHTML =
+          '<span class="pill">phase: ' + item.phase + '</span>'
+          + '<span class="pill">attempt: ' + item.attempt + '</span>'
+          + '<span class="pill">build: ' + item.build + '</span>'
+          + '<span class="pill">' + val + '</span>'
+          + '<span class="pill">' + hyg + '</span>';
+      }
+
+      function renderRules(item) {
+        const list = document.getElementById('rules');
+        const lines = (item.rules || '').split('\\n')
+          .filter((line) => line.trim().startsWith('- '));
+        list.innerHTML = lines.map((line) => '<li>' + line.replace(/^- /, '') + '</li>').join('');
+      }
+
+      async function refresh() {
+        const res = await fetch('/api/overview.json', { cache: 'no-store' });
+        const data = await res.json();
+        const item = data.workspaces.find((w) => w.name === ws);
+        if (!item) {
+          document.getElementById('status').textContent = 'Workspace not found: ' + ws;
+          return;
+        }
+        renderStatus(item);
+        renderPreview(item);
+        renderRules(item);
+      }
+
+      async function post(url, field, value, note) {
+        const text = value.trim();
+        const el = document.getElementById(note);
+        if (!text) { el.textContent = 'Write something first.'; return; }
+        const body = new URLSearchParams({ workspace: ws, [field]: text });
+        const res = await fetch(url, { method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+        el.textContent = res.ok ? 'Saved. Rebuilding on the next cycle...' : 'Failed to save.';
+        return res.ok;
+      }
+
+      document.getElementById('send-feedback').addEventListener('click', async () => {
+        const box = document.getElementById('feedback');
+        if (await post('/api/feedback', 'message', box.value, 'feedback-note')) box.value = '';
+      });
+      document.getElementById('add-rule').addEventListener('click', async () => {
+        const box = document.getElementById('rule');
+        if (await post('/api/rules', 'rule', box.value, 'rule-note')) box.value = '';
+      });
+
+      refresh();
+      setInterval(refresh, 1500);
+    </script>
   </body>
 </html>
 """
@@ -362,6 +501,40 @@ def _append_feedback(workspace: Path, username: str, message: str) -> None:
         handle.write(block)
 
 
+def _rules_file(workspace: Path) -> Path:
+    return workspace / ".harness" / "rules.md"
+
+
+def _read_rules(workspace: Path) -> str:
+    path = _rules_file(workspace)
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
+def _append_rule(workspace: Path, username: str, rule: str) -> None:
+    text = rule.strip()
+    if not text:
+        return
+    path = _rules_file(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if not existing:
+        existing = "# Project rules (always enforced)\n\n"
+    line = f"- {text}  _(added by {username})_\n"
+    path.write_text(existing + line, encoding="utf-8")
+
+
+def _build_count(workspace: Path) -> int:
+    path = workspace / ".harness" / "build_count"
+    if not path.exists():
+        return 0
+    try:
+        return int(path.read_text(encoding="utf-8").strip() or "0")
+    except (ValueError, OSError):
+        return 0
+
+
 def _load_workspace(workspace: Path, root: Path) -> WorkspaceStatus:
     data = _read_json(workspace / ".harness" / "status.json", {"phase": "idle"})
     latest = _latest_attempt(workspace)
@@ -413,7 +586,11 @@ def overview(root: Path, username: str) -> dict[str, object]:
                 "hygiene_passed": item.hygiene_passed,
                 "summary": item.summary,
                 "feedback": _latest_feedback(item.path),
+                "rules": _read_rules(item.path),
+                "build": _build_count(item.path),
+                "has_preview": (item.path / "index.html").exists(),
                 "link": item.link,
+                "console": f"/console?ws={item.name}",
             }
             for item in workspaces
         ],
@@ -472,6 +649,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if path in {"/", "/dashboard"}:
             self._send(HTTPStatus.OK, "text/html; charset=utf-8", HTML_SHELL.encode("utf-8"))
             return
+        if path == "/console":
+            self._send(HTTPStatus.OK, "text/html; charset=utf-8", CONSOLE_SHELL.encode("utf-8"))
+            return
         if path == "/api/overview.json":
             body = json.dumps(overview(self.root, username), indent=2).encode("utf-8")
             self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
@@ -487,25 +667,34 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         return super().do_GET()
 
+    def _resolve_workspace(self, rel: str) -> Path | None:
+        target = self.root if not rel else (self.root / rel).resolve()
+        root_resolved = self.root.resolve()
+        if target != root_resolved and root_resolved not in target.parents:
+            return None
+        return target
+
+    def _handle_workspace_post(self, apply, ok_key: str) -> None:
+        username = self._require_auth()
+        if username is None:
+            self._send(HTTPStatus.UNAUTHORIZED, "text/plain; charset=utf-8", b"login required")
+            return
+        size = int(self.headers.get("Content-Length", "0"))
+        form = _parse_form(self.rfile.read(size))
+        target = self._resolve_workspace(form.get("workspace", ""))
+        if target is None:
+            self._send(HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8", b"invalid workspace")
+            return
+        apply(target, username, form.get(ok_key, ""))
+        self._send(HTTPStatus.OK, "application/json; charset=utf-8", b'{"ok": true}')
+
     def do_POST(self):  # noqa: N802
         path = urlparse(self.path).path
         if path == "/api/feedback":
-            username = self._require_auth()
-            if username is None:
-                self._send(HTTPStatus.UNAUTHORIZED, "text/plain; charset=utf-8", b"login required")
-                return
-            size = int(self.headers.get("Content-Length", "0"))
-            form = _parse_form(self.rfile.read(size))
-            rel = form.get("workspace", "")
-            message = form.get("message", "")
-            target = self.root if not rel else (self.root / rel).resolve()
-            if self.root.resolve() not in target.parents and target != self.root.resolve():
-                self._send(
-                    HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8", b"invalid workspace"
-                )
-                return
-            _append_feedback(target, username, message)
-            self._send(HTTPStatus.OK, "application/json; charset=utf-8", b'{"ok": true}')
+            self._handle_workspace_post(_append_feedback, "message")
+            return
+        if path == "/api/rules":
+            self._handle_workspace_post(_append_rule, "rule")
             return
         if path != "/login":
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found")
