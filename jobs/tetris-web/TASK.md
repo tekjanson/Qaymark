@@ -16,10 +16,18 @@ python3 -m unittest test_webtetris && node --test test_game.mjs && node --check 
 
 ## Files you must complete
 
+Overwrite these two files **at the workspace root** — use exactly these paths,
+do not create a `src/` folder or any subdirectory, and do not rename them:
+
 - `game.js` — the browser game logic (a `Tetris` class plus `gameState` and
   `applyAction`), gated by `test_game.mjs`.
 - `webtetris.py` — the Python seam (`game_state`, `apply_action`) over the
   seeded `tetris.py` core, gated by `test_webtetris.py`.
+
+The acceptance tests import `webtetris` and `./game.js` from the root, so the
+files must sit next to `test_webtetris.py` and `test_game.mjs`. Keep every line
+at or under 100 characters and keep nesting shallow (use small helpers and early
+returns), or the hygiene gate fails.
 
 `app.js`, `index.html`, and `styles.css` are provided as an editable starter
 that renders `game.js` to a canvas and wires keyboard + buttons. Keep them

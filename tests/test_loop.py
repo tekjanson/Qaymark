@@ -102,6 +102,19 @@ class AutoformatTests(unittest.TestCase):
                 loop.autoformat(Path("/tmp"), ["a.py"], frozenset())
         run.assert_not_called()
 
+    def test_web_assets_are_prettier_formatted(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        with mock.patch.object(loop.shutil, "which", return_value="/usr/bin/prettier"):
+            with mock.patch.object(loop.subprocess, "run") as run:
+                loop._format_web(
+                    root, ["game.js", "app.css", "spec.mjs", "x.py"], frozenset({"spec.mjs"})
+                )
+        cmd = run.call_args[0][0]
+        self.assertIn("game.js", cmd)
+        self.assertIn("app.css", cmd)
+        self.assertNotIn("spec.mjs", cmd)
+        self.assertNotIn("x.py", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

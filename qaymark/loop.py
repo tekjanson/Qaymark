@@ -223,9 +223,10 @@ def run_validation(root: Path, command: str) -> subprocess.CompletedProcess[str]
     )
 
 
-def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> None:
-    """Run black on generated Python files (if available) so style is deterministic."""
+_PRETTIER_SUFFIXES = (".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx", ".css", ".html", ".json")
 
+
+def _format_python(root: Path, written: list[str], protected: frozenset[str]) -> None:
     black = shutil.which("black")
     if black is None:
         return
@@ -234,6 +235,30 @@ def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> Non
         return
     cmd = [black, "-q", "-l", "100", *targets]
     subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=120, check=False)
+
+
+def _format_web(root: Path, written: list[str], protected: frozenset[str]) -> None:
+    prettier = shutil.which("prettier")
+    if prettier is None:
+        return
+    targets = [
+        f for f in written if f.endswith(_PRETTIER_SUFFIXES) and f not in protected
+    ]
+    if not targets:
+        return
+    cmd = [prettier, "--write", "--print-width", "100", *targets]
+    subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=120, check=False)
+
+
+def autoformat(root: Path, written: list[str], protected: frozenset[str]) -> None:
+    """Auto-format generated files so style is deterministic before the gate.
+
+    Python is formatted with black and web assets (JS/TS/CSS/HTML/JSON) with
+    prettier when those tools are on PATH; missing tools are skipped silently.
+    """
+
+    _format_python(root, written, protected)
+    _format_web(root, written, protected)
 
 
 def run_hygiene(config: HarnessConfig, tools: Tools) -> HygieneResult:
