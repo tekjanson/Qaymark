@@ -31,6 +31,24 @@ Two layers:
 The same hygiene gate runs as a **git pre-commit hook and in CI**, so the rules
 apply to hand-written code too — see [Guardrails](#guardrails).
 
+## The standards ecosystem
+
+Qaymark is meant to run **Ollama-only** and, once pointed at a job, keep
+improving on its own. The quality bar is a growing family of manifest-driven
+enforcement frameworks under [spamApply1](https://github.com/spamApply1) — one
+repo per concern, each with the same `check --manifest --json --strict` CLI:
+
+- **[slop-be-gone](https://github.com/spamApply1/slop-be-gone)** — code hygiene.
+- **[design-be-gone](https://github.com/spamApply1/design-be-gone)** — design
+  consistency (no inline styles, one `<h1>`, one filename case, bounded exports).
+- **[chaos-be-gone](https://github.com/spamApply1/chaos-be-gone)** — workflow
+  sanity (CI present, hooks wired, gitignore/README, no secrets in workflows).
+
+The goal is to keep pushing enforcement outward — code, design, workflow — until
+intent itself is an executable standard, so there is essentially one canonical
+way for anything to exist.
+
+
 ## Requirements
 
 - Docker + Docker Compose v2
