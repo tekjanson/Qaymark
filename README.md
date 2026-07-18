@@ -141,7 +141,7 @@ tightened thresholds — the "fractal consistency" policy:
 - Lines ≤ 100 chars; a single final newline; no trailing whitespace
 - No merge markers, committed secrets, or leftover debug artifacts
 - Python AST rigor: no bare/broad `except`, no mutable defaults, no `eval`/`exec`
-- Small, flat functions: ≤ 60 lines, ≤ 5 arguments, ≤ 4 levels of nesting
+- Small, flat functions: ≤ 45 lines, ≤ 5 arguments, ≤ 4 levels of nesting
 
 Validate it against the real engine:
 
