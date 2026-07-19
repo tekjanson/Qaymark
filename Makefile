@@ -94,12 +94,13 @@ control:
 
 rebuild-ui:
 	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	UI_PORT="$${PORT:-0}" ; \
 	mkdir -p "$$ROOT" ; \
 	test -n "$$DASHBOARD_PASSWORD" || { echo "Set DASHBOARD_PASSWORD"; exit 1; } ; \
 	PYTHONPATH="$(CURDIR)" python3 -m unittest discover -s tests -t . -v && \
 	python3 scripts/hygiene_gate.py --path "$(CURDIR)" && \
 	DASHBOARD_PASSWORD="$$DASHBOARD_PASSWORD" \
-	python3 scripts/dashboard.py "$$ROOT" $(if $(PORT),--port $(PORT),)
+	python3 scripts/dashboard.py "$$ROOT" --port "$$UI_PORT"
 
 loops:
 	python3 scripts/loops.py $(if $(CMD),$(CMD),list) $(LOOP_ARGS)

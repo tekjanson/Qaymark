@@ -2046,7 +2046,8 @@ def main() -> int:
     root = Path(args.root).expanduser().resolve()
     handler = partial(DashboardHandler, root=root)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
-    print(f"dashboard: http://127.0.0.1:{args.port}", flush=True)
+    port = server.server_address[1]
+    print(f"dashboard: http://127.0.0.1:{port}", flush=True)
     print(f"root: {root}", flush=True)
     print(f"user: {_user()}", flush=True)
     try:

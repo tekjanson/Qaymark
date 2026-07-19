@@ -152,11 +152,12 @@ make control PORT=8765          # serves the control plane on the factory root
 To rebuild the harness UI from source, run:
 
 ```bash
-make rebuild-ui PORT=8765
+make rebuild-ui
 ```
 
 That runs the test suite and hygiene gate first, then serves the latest control
-plane from the repo source.
+plane from the repo source. If you omit `PORT`, it picks a free port and prints
+the URL it bound.
 
 The dashboard discovers any workspace with a `.harness/status.json` beneath the
 root, shows a global overview (total / running / passed / failed), a **reactive
