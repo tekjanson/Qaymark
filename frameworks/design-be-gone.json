@@ -49,6 +49,69 @@
       "source_refs": [
         "design-be-gone/max-exports"
       ]
+    },
+    {
+      "id": "ui-flow-completeness-design",
+      "type": "composite",
+      "enabled": true,
+      "severity": "error",
+      "logic": "all",
+      "match": [
+        "**/*.html",
+        "**/*.htm",
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.vue",
+        "**/*.svelte"
+      ],
+      "description": "User-facing UI should feel alive, not like a thin shell.",
+      "what": "Flags UI files that hide controls behind dead buttons or unlabeled inputs.",
+      "why": "Design-be-gone should force interfaces to feel complete and human.",
+      "source_refs": [
+        "qaymark/console-ui",
+        "qaymark/loop-control",
+        "qaymark/plan-panel"
+      ],
+      "rules": [
+        {
+          "id": "ui-buttons-have-actions",
+          "type": "button-actions",
+          "enabled": true,
+          "severity": "error",
+          "description": "Buttons need explicit actions.",
+          "what": "Flags <button> elements without data-action or onclick wiring.",
+          "why": "A button without an action is fake affordance."
+        },
+        {
+          "id": "ui-buttons-have-types",
+          "type": "button-types",
+          "enabled": true,
+          "severity": "error",
+          "description": "Buttons need safe explicit types.",
+          "what": "Flags <button> elements missing type=button/submit/reset.",
+          "why": "Implicit button types make forms feel brittle."
+        },
+        {
+          "id": "ui-controls-are-labelled",
+          "type": "form-labels",
+          "enabled": true,
+          "severity": "error",
+          "description": "Controls need labels or names.",
+          "what": "Flags inputs, textareas, and selects with no label or accessible name.",
+          "why": "A readable interface always tells users what each control means."
+        },
+        {
+          "id": "ui-actions-are-linked",
+          "type": "asset-links",
+          "enabled": true,
+          "severity": "error",
+          "description": "Action hooks need real handlers.",
+          "what": "Flags data-action hooks that no script resolves.",
+          "why": "Wired UI should map each action to a real implementation."
+        }
+      ]
     }
   ]
 }

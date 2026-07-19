@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Qaymark Control Room</title>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel chat-panel">
+        <h1>Chat</h1>
+        <ul id="chat-log" aria-live="polite"></ul>
+        <form id="chat-form">
+          <label class="field-label" for="chat-input">Message</label>
+          <textarea id="chat-input" rows="3" placeholder="Tell the harness what to do"></textarea>
+          <button id="send-message" type="submit" data-action="send-message">Send</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Projects</h2>
+        <ul id="project-list"></ul>
+      </section>
+      <section class="panel">
+        <h2>Queue</h2>
+        <div id="status-panel"></div>
+        <ul id="queue-list"></ul>
+        <div class="actions">
+          <button id="pause-queue" type="button" data-action="pause-queue">Pause</button>
+          <button id="resume-queue" type="button" data-action="resume-queue">Resume</button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

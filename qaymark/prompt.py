@@ -41,6 +41,11 @@ def build_system_prompt(rule_digest: str) -> str:
         "(usually disabled). Paths must stay inside the workspace; never use "
         "absolute paths or '..'. Choose real, descriptive paths for the task; "
         "do not copy the placeholder paths from the schema.\n\n"
+        "Work on the smallest safe chunk that can move the task forward. Prefer one "
+        "file or one focused edit over broad rewrites.\n\n"
+        "For user-facing UI, avoid thin dead-end shells: show live state, clear "
+        "controls, helpful copy, and immediate feedback so the interface feels "
+        "fluid and human.\n\n"
         "Every file must clear these slop-be-gone rules at error severity:\n"
         f"{rule_digest}.\n"
         "So: no placeholder comments, no deferred-work markers, no empty files, lines "
@@ -83,7 +88,7 @@ def synthesize_feedback(report: AttemptReport, root: object = None) -> str:
         skipped = "; ".join(report.operations.skipped[:6])
         parts.append(f"- Skipped operations: {skipped}")
     parts.append(
-        "- Next attempt: fix every hygiene violation and validation failure, "
-        "keep changes small and explicit, and respect the existing structure."
+        "- Next attempt: fix every hygiene violation and validation failure, keep "
+        "changes to the smallest safe chunk, and respect the existing structure."
     )
     return "\n".join(parts)

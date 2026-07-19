@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-dir", default=None, help="Cache dir for the sbg/drift tools")
     parser.add_argument("--allow-commands", action="store_true", help="Permit run_command ops")
     parser.add_argument(
+        "--forever", action="store_true", help="Retry forever until the gate passes"
+    )
+    parser.add_argument(
         "--no-reference", action="store_true", help="Skip the drift understanding map"
     )
     parser.add_argument("--no-strict", action="store_true", help="Do not fail on hygiene warnings")
@@ -62,6 +65,8 @@ def config_from_args(args: argparse.Namespace) -> HarnessConfig:
         config.base_url = args.base_url
     if args.allow_commands:
         config.allow_commands = True
+    if args.forever:
+        config.loop_forever = True
     if args.no_reference:
         config.use_reference = False
     if args.no_strict:

@@ -129,6 +129,69 @@
       "why": "Dangling action hooks are UI wired to nothing."
     },
     {
+      "id": "ui-flow-completeness",
+      "type": "composite",
+      "enabled": true,
+      "severity": "error",
+      "logic": "all",
+      "match": [
+        "**/*.html",
+        "**/*.htm",
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.vue",
+        "**/*.svelte"
+      ],
+      "description": "User-facing UI must feel complete, not like a thin shell.",
+      "what": "Flags UI files that lack explicit actions, labels, or wired feedback loops.",
+      "why": "A visible feature should feel fluid and human, with real controls and state.",
+      "source_refs": [
+        "qaymark/console-ui",
+        "qaymark/loop-control",
+        "qaymark/plan-panel"
+      ],
+      "rules": [
+        {
+          "id": "ui-buttons-have-actions",
+          "type": "button-actions",
+          "enabled": true,
+          "severity": "error",
+          "description": "Every button should do something explicit.",
+          "what": "Flags <button> elements without data-action or onclick wiring.",
+          "why": "Dead buttons make UI look done when it is not."
+        },
+        {
+          "id": "ui-buttons-have-types",
+          "type": "button-types",
+          "enabled": true,
+          "severity": "error",
+          "description": "Every button should declare its type.",
+          "what": "Flags <button> elements missing type=button/submit/reset.",
+          "why": "Implicit submit buttons create brittle, surprising flows."
+        },
+        {
+          "id": "ui-controls-are-labelled",
+          "type": "form-labels",
+          "enabled": true,
+          "severity": "error",
+          "description": "Controls need accessible labels or names.",
+          "what": "Flags inputs, textareas, and selects with no explicit label.",
+          "why": "Unlabelled controls feel thin and are harder to use."
+        },
+        {
+          "id": "ui-actions-are-linked",
+          "type": "asset-links",
+          "enabled": true,
+          "severity": "error",
+          "description": "UI actions should be wired to actual handlers.",
+          "what": "Flags data-action hooks that no script listens for.",
+          "why": "A control without an implementation is just a promise."
+        }
+      ]
+    },
+    {
       "id": "fully-defined-rules",
       "type": "fully-defined-rules",
       "enabled": true,

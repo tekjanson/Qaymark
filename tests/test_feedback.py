@@ -49,7 +49,8 @@ class LoopFeedbackTests(unittest.TestCase):
         config = HarnessConfig(task="build a module", workspace=self.tmp, use_reference=False)
         config.max_attempts = 1
         with (
-            mock.patch.object(loop, "chat", return_value=_EMPTY_PAYLOAD) as chat,
+            mock.patch.object(loop.plan, "generate_plan", return_value=None),
+            mock.patch.object(loop, "ollama_chat", return_value=_EMPTY_PAYLOAD) as chat,
             mock.patch.object(loop, "ensure_slop_src", return_value=None),
             mock.patch.object(loop, "ensure_drift_src", return_value=None),
         ):

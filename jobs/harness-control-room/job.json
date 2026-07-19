@@ -1,0 +1,7 @@
+{
+  "name": "harness-control-room",
+  "description": "Browser control room for the harness: chat, projects, and queue controls.",
+  "validation": "python3 -m unittest test_control_room && node --check app.js",
+  "model": "qwen2.5-coder:7b",
+  "max_attempts": 8
+}

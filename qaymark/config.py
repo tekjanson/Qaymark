@@ -56,6 +56,20 @@ def default_cache_dir() -> Path:
     return Path(base) / "local-coding-harness"
 
 
+def factory_root() -> Path:
+    """The persistent floor where every loop's workspace lives.
+
+    Load-bearing work must survive cleanup, so loops default here (under
+    ``$XDG_STATE_HOME``) rather than in a disposable ``/tmp`` directory.
+    """
+
+    override = os.getenv("QAYMARK_FACTORY_ROOT")
+    if override:
+        return Path(override).expanduser()
+    base = os.getenv("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+    return Path(base) / "qaymark"
+
+
 @dataclass
 class HarnessConfig:
     """Resolved settings for a single harness run."""
@@ -72,6 +86,7 @@ class HarnessConfig:
     use_reference: bool = field(
         default_factory=lambda: _env_flag("HARNESS_USE_REFERENCE", True)
     )
+    loop_forever: bool = field(default_factory=lambda: _env_flag("HARNESS_FOREVER", False))
     strict: bool = True
     request_timeout: int = field(default_factory=lambda: _env_int("HARNESS_REQUEST_TIMEOUT", 600))
     seed_dir: Path | None = None

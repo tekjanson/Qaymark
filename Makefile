@@ -5,8 +5,8 @@ TASK ?=
 MODEL ?=
 HARNESS_ARGS ?=
 
-.PHONY: help up down logs pull chat harness supervise dashboard play test hygiene gate \
-	install hooks clean
+.PHONY: help up down logs pull chat harness supervise control-room control loops \
+	dashboard rebuild-ui play test hygiene gate install hooks clean
 
 help:
 	@echo "Qaymark — local AI code-generation factory"
@@ -21,7 +21,13 @@ help:
 	@echo "       WORKSPACE=/path/to/dir     Run the guardrailed code harness once"
 	@echo "  make supervise TASK=\"...\" \\"
 	@echo "       WORKSPACE=/path/to/dir     Build then rebuild on every dashboard feedback"
+	@echo "  make control-room WORKSPACE=/path/to/dir"
+	@echo "       Run the harness control-room job on a workspace"
 	@echo "  make dashboard ROOT=/path       Serve the signed-in control plane"
+	@echo "  make control                    Serve the control plane on the factory root"
+	@echo "  make rebuild-ui                 Test, gate, and serve the latest"
+	@echo "                                   control plane from source"
+	@echo "  make loops CMD=list             Manage loops from the CLI (jobs/list/launch/...)"
 	@echo "  make play WORKSPACE=/path       Serve a built game if it passes"
 	@echo "  make test                      Run the harness unit tests"
 	@echo "  make gate                      Run the strict hygiene gate on the repo"
@@ -63,10 +69,40 @@ supervise:
 		$(if $(MODEL),--model $(MODEL),) \
 		$(HARNESS_ARGS)
 
+control-room:
+	@WORKSPACE="$${WORKSPACE:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark/control-room}" ; \
+	python3 scripts/code_harness.py \
+		--task "$$(cat jobs/harness-control-room/TASK.md)" \
+		--seed jobs/harness-control-room/seed \
+		--starter jobs/harness-control-room/starter \
+		--workspace "$$WORKSPACE" \
+		--validation-command "python3 -m unittest test_control_room && node --check app.js" \
+		--supervise \
+		$(if $(MODEL),--model $(MODEL),) \
+		$(HARNESS_ARGS)
+
 dashboard:
 	@test -n "$(ROOT)" || { echo "Usage: make dashboard ROOT=/path"; exit 1; }
 	DASHBOARD_PASSWORD="$${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}" \
 	python3 scripts/dashboard.py "$(ROOT)" $(if $(PORT),--port $(PORT),)
+
+control:
+	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$ROOT" ; \
+	DASHBOARD_PASSWORD="$${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}" \
+	python3 scripts/dashboard.py "$$ROOT" $(if $(PORT),--port $(PORT),)
+
+rebuild-ui:
+	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$ROOT" ; \
+	test -n "$$DASHBOARD_PASSWORD" || { echo "Set DASHBOARD_PASSWORD"; exit 1; } ; \
+	PYTHONPATH="$(CURDIR)" python3 -m unittest discover -s tests -t . -v && \
+	python3 scripts/hygiene_gate.py --path "$(CURDIR)" && \
+	DASHBOARD_PASSWORD="$$DASHBOARD_PASSWORD" \
+	python3 scripts/dashboard.py "$$ROOT" $(if $(PORT),--port $(PORT),)
+
+loops:
+	python3 scripts/loops.py $(if $(CMD),$(CMD),list) $(LOOP_ARGS)
 
 play:
 	@test -n "$(WORKSPACE)" || { echo "Usage: make play WORKSPACE=/path"; exit 1; }

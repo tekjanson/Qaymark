@@ -22,6 +22,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("JSON", prompt)
         self.assertIn("60 lines", prompt)
         self.assertIn("placeholder-comments", prompt)
+        self.assertIn("smallest safe chunk", prompt)
+        self.assertIn("fluid and human", prompt)
 
     def test_user_prompt_includes_task_and_feedback(self) -> None:
         prompt = build_user_prompt("build a parser", "pytest", "<snap>", "fix line 3")
@@ -31,6 +33,7 @@ class PromptTests(unittest.TestCase):
     def test_rule_digest_reads_real_manifest(self) -> None:
         digest = load_rule_digest(DEFAULT_MANIFEST)
         self.assertIn("python-function-length", digest)
+        self.assertIn("ui-flow-completeness", digest)
 
     def test_rule_digest_handles_missing_manifest(self) -> None:
         digest = load_rule_digest(Path("/nonexistent/manifest.json"))
@@ -51,6 +54,7 @@ class FeedbackTests(unittest.TestCase):
         text = synthesize_feedback(self._report(True, [violation]))
         self.assertIn("long-lines", text)
         self.assertIn("a.py:3", text)
+        self.assertIn("smallest safe chunk", text)
 
 
 if __name__ == "__main__":

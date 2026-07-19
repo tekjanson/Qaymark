@@ -189,3 +189,73 @@ def update_rule(fid: str, rule_id: str, changes: dict) -> dict:
         _write_manifest(fid, manifest)
         return _rule_view(rule)
     raise KeyError(f"unknown rule {rule_id!r} in {fid}")
+
+
+def validate_manifest(manifest: object) -> list[str]:
+    """Structural checks so a raw edit can't save broken policy."""
+
+    problems: list[str] = []
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object"]
+    rules = manifest.get("rules")
+    if not isinstance(rules, list):
+        return ["manifest must contain a 'rules' array"]
+    seen: set[str] = set()
+    for index, rule in enumerate(rules):
+        label = f"rule {index + 1}"
+        if not isinstance(rule, dict):
+            problems.append(f"{label} is not an object")
+            continue
+        rule_id = rule.get("id")
+        if not isinstance(rule_id, str) or not rule_id.strip():
+            problems.append(f"{label} is missing a non-empty 'id'")
+        elif rule_id in seen:
+            problems.append(f"rule '{rule_id}' has a duplicate id")
+        else:
+            seen.add(rule_id)
+        if not isinstance(rule.get("type"), str) or not rule.get("type", "").strip():
+            problems.append(f"{label} is missing a non-empty 'type'")
+    return problems
+
+
+def raw_manifest(fid: str) -> str:
+    """The framework's manifest as pretty JSON for a full-text editor."""
+
+    return json.dumps(read_manifest(fid), indent=2) + "\n"
+
+
+def replace_manifest(fid: str, manifest: dict) -> dict:
+    """Replace a framework's entire manifest after structural validation."""
+
+    problems = validate_manifest(manifest)
+    if problems:
+        raise ValueError("; ".join(problems))
+    _write_manifest(fid, manifest)
+    return {"rules": len(manifest.get("rules", []))}
+
+
+def add_rule(fid: str, rule: dict) -> dict:
+    """Append a new rule; the manifest must stay valid afterwards."""
+
+    if not isinstance(rule, dict):
+        raise ValueError("rule must be a JSON object")
+    manifest = read_manifest(fid)
+    manifest.setdefault("rules", []).append(rule)
+    problems = validate_manifest(manifest)
+    if problems:
+        raise ValueError("; ".join(problems))
+    _write_manifest(fid, manifest)
+    return _rule_view(rule)
+
+
+def delete_rule(fid: str, rule_id: str) -> dict:
+    """Remove a rule by id and persist the manifest."""
+
+    manifest = read_manifest(fid)
+    rules = manifest.get("rules", [])
+    kept = [rule for rule in rules if rule.get("id", rule.get("type")) != rule_id]
+    if len(kept) == len(rules):
+        raise KeyError(f"unknown rule {rule_id!r} in {fid}")
+    manifest["rules"] = kept
+    _write_manifest(fid, manifest)
+    return {"deleted": rule_id, "rules": len(kept)}
