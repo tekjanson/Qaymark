@@ -1,0 +1,7 @@
+{
+  "name": "tetris-web",
+  "description": "Playable browser Tetris: fill game.js so the Node + Python tests pass.",
+  "validation": "python3 -m unittest test_webtetris && node --test test_game.mjs && node --check app.js",
+  "model": "qwen2.5-coder:7b",
+  "max_attempts": 12
+}

@@ -52,3 +52,18 @@ WORKERS=1 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
 
 The winning workspace is static-site ready; open it from a local web server to
 play in the browser.
+
+## Harness control room
+
+Build a browser-based control room for the harness itself: chat, project list,
+queue management, and pause/resume orchestration controls.
+
+```bash
+jobs/harness-control-room/run.sh
+# or tune it:
+WORKERS=1 HARNESS_MAX_ATTEMPTS=8 OLLAMA_MODEL=qwen2.5-coder:7b \
+  jobs/harness-control-room/run.sh "$HOME/.local/state/qaymark/control-room"
+```
+
+The goal is a live operator surface for steering multiple harness projects from
+one place, with durable work kept out of `/tmp`.

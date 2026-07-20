@@ -10,10 +10,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = REPO_ROOT / "sbg_manifest.json"
 
 SLOP_REPO_URL = "https://github.com/spamApply1/slop-be-gone"
-IDUD_REPO_URL = "https://github.com/tekjanson/idud"
+DRIFT_REPO_URL = "https://github.com/spamApply1/drift-be-gone"
 
 # The spamApply1 standards ecosystem — one framework per concern. slop-be-gone
-# gates code hygiene; these siblings extend enforcement to design and workflow.
+# gates code hygiene; these siblings extend enforcement to design, workflow, and
+# architecture (drift-be-gone, which also emits the understanding map).
 DESIGN_REPO_URL = "https://github.com/spamApply1/design-be-gone"
 WORKFLOW_REPO_URL = "https://github.com/spamApply1/chaos-be-gone"
 
@@ -55,6 +56,20 @@ def default_cache_dir() -> Path:
     return Path(base) / "local-coding-harness"
 
 
+def factory_root() -> Path:
+    """The persistent floor where every loop's workspace lives.
+
+    Load-bearing work must survive cleanup, so loops default here (under
+    ``$XDG_STATE_HOME``) rather than in a disposable ``/tmp`` directory.
+    """
+
+    override = os.getenv("QAYMARK_FACTORY_ROOT")
+    if override:
+        return Path(override).expanduser()
+    base = os.getenv("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+    return Path(base) / "qaymark"
+
+
 @dataclass
 class HarnessConfig:
     """Resolved settings for a single harness run."""
@@ -68,7 +83,10 @@ class HarnessConfig:
     manifest_path: Path = DEFAULT_MANIFEST
     cache_dir: Path = field(default_factory=default_cache_dir)
     allow_commands: bool = field(default_factory=lambda: _env_flag("HARNESS_ALLOW_COMMANDS", False))
-    use_idud: bool = field(default_factory=lambda: _env_flag("HARNESS_USE_IDUD", True))
+    use_reference: bool = field(
+        default_factory=lambda: _env_flag("HARNESS_USE_REFERENCE", True)
+    )
+    loop_forever: bool = field(default_factory=lambda: _env_flag("HARNESS_FOREVER", False))
     strict: bool = True
     request_timeout: int = field(default_factory=lambda: _env_int("HARNESS_REQUEST_TIMEOUT", 600))
     seed_dir: Path | None = None

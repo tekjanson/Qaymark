@@ -1,0 +1,7 @@
+{
+  "name": "fizzbuzz",
+  "description": "Classic FizzBuzz as a small pure function that passes fixed tests.",
+  "validation": "python3 -m unittest test_fizzbuzz",
+  "model": "qwen2.5-coder:3b",
+  "max_attempts": 6
+}

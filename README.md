@@ -19,9 +19,10 @@ Two layers:
      the hygiene gate. Generated code must pass the strict rule set in
      `sbg_manifest.json` (no placeholders, no marker spam, no debug artifacts,
      no secrets, small/flat/few-arg functions, and more).
-   - **[idud](https://github.com/tekjanson/idud)** — the reference map. Builds a
-     synthetic understanding artifact (a dependency graph / "bridges") so the
-     model knows what already exists and what to touch.
+   - **[drift-be-gone](https://github.com/spamApply1/drift-be-gone)** — the
+     reference map. Builds a synthetic understanding artifact (a dependency
+     graph plus a repo map) so the model knows what already exists and what to
+     touch.
 
    Each attempt is a **single one-shot generation**. There are no chat turns:
    the harness itself does all the tool work (applying edits, running
@@ -54,27 +55,41 @@ way for anything to exist.
 - Docker + Docker Compose v2
 - Python 3.10+
 - `git`, and (optional) `cargo` for the idud reference bridge
-- A running Ollama with a coding model pulled (the runtime below does this)
+- A running Ollama with a coding model pulled is optional; `make up` uses a built-in fallback when the model service is unavailable.
 
 ## Quick start
 
-Start the runtime and pull the default model:
+Start the whole system with a single command:
 
 ```bash
 make up
 ```
 
-- Open WebUI: <http://localhost:8095>  (moved off `3000` to avoid clashing with
-  dev servers such as Waymark)
-- Ollama API: <http://localhost:11434>
-- Control plane: `make dashboard ROOT=/tmp/qaymark-dashboard` with
-  `DASHBOARD_USER` / `DASHBOARD_PASSWORD`
+`make up` brings up everything you need in one shot:
+
+- **Model runtime** — starts Ollama + Open WebUI if they aren't already
+  reachable (skip with `QAYMARK_NO_RUNTIME=1`; the harness still has a built-in
+  fallback if the model service is down).
+- **Control plane UI** — serves the signed-in dashboard where you can launch
+  loops, steer them, give feedback, and edit governance rules. It prints the URL
+  and the login (defaults: user `admin`, password `qaymark`; override with
+  `DASHBOARD_USER` / `DASHBOARD_PASSWORD`, and the port with `PORT`).
+- Open WebUI: <http://localhost:8095>, Ollama API: <http://localhost:11434>.
+
+To run just the offline one-shot harness on your last-used workspace, use
+`make demo`; to start only the Docker runtime, use `make runtime`.
+
+- `make demo` remembers the last workspace you used and reuses it by default
+  (override with `HARNESS_WORKSPACE=/path`); the default task flips to a Tetris
+  browser build when that path contains `tetris`, otherwise the simple Python
+  demo (override with `HARNESS_TASK="..."`).
 
 Run the guardrailed harness against a workspace:
 
 ```bash
 make harness TASK="Create a Python module that adds two numbers with a CLI" \
              WORKSPACE=/tmp/adder-demo
+make control-room WORKSPACE=/tmp/factory/control-room
 ```
 
 Or install the CLI and run it from anywhere:
@@ -101,17 +116,17 @@ For each attempt (default 3):
    with `--allow-commands`).
 4. **Validate** by running the validation command (must exit 0).
 5. **Gate on hygiene** with the real `sbg` engine and `sbg_manifest.json`.
-6. **Build the idud reference** for the workspace (graph nodes/edges + brief).
+6. **Build the drift reference** for the workspace (graph nodes/edges + brief).
 7. If validation and hygiene both pass, **stop and succeed**. Otherwise fuse the
-   validation output, hygiene violations, and idud summary into **targeted
+   validation output, hygiene violations, and drift summary into **targeted
    feedback** and run another one-shot.
 
 Per-attempt artifacts are written under `<workspace>/.harness/`.
 
-The `sbg` and `idud` tools are cloned (and idud built) once into a cache
-directory (`~/.cache/local-coding-harness` by default) and reused. If a tool
-cannot be provisioned, the harness degrades gracefully: a minimal built-in
-hygiene scanner stands in for `sbg`, and the idud step is skipped.
+The `sbg` and `drift` tools are cloned once into a cache directory
+(`~/.cache/local-coding-harness` by default) and reused. If a tool cannot be
+provisioned, the harness degrades gracefully: a minimal built-in hygiene
+scanner stands in for `sbg`, and the drift step is skipped.
 
 ## Around-the-clock supervisor (the perfection loop)
 
@@ -142,13 +157,107 @@ phases, attempts, validation, hygiene, and the feedback channel:
 
 ```bash
 export DASHBOARD_USER=admin DASHBOARD_PASSWORD='choose-a-password'
-make dashboard ROOT=/tmp/factory PORT=8765
+make control PORT=8765          # serves the control plane on the factory root
+# or point it anywhere: make dashboard ROOT=/path PORT=8765
 # open http://127.0.0.1:8765 and sign in
 ```
 
-The dashboard discovers any workspace with a `.harness/status.json` beneath
-`ROOT`, shows a global overview (total / running / passed / failed), and lets
-you submit feedback that drives the supervisor's next rebuild.
+To rebuild the harness UI from source, run:
+
+```bash
+make rebuild-ui
+```
+
+That runs the test suite and hygiene gate first, then serves the latest control
+plane from the repo source. If you omit `PORT`, it picks a free port and prints
+the URL it bound.
+
+The dashboard discovers any workspace with a `.harness/status.json` beneath the
+root, shows a global overview (total / running / passed / failed), a **reactive
+3D factory floor** where each loop sits at its current lifecycle station, and
+lets you submit feedback that drives the supervisor's next rebuild.
+
+### Make it your own dashboard
+
+Every page is a rearrangeable, pinnable board so you can watch what you want,
+how you want:
+
+- **Rearrange** — drag any card by its handle to reorder the layout; the order
+  is remembered per page in your browser.
+- **Pin** — pin the cards you care about, then hit **My dashboard** in the
+  top-right to collapse the view down to just those. **Reset layout** clears it.
+- **Factory copilot** — a persistent chat dock (bottom-right, on every page)
+  talks to the model and can *drive the factory*: type a question, or a command
+  like `/launch tetris-web`, `/run-all`, `/redirect <loop> <task>`, or
+  `/feedback <loop> <text>`.
+- **Watch it think** — each workspace console has a **Live generation** panel
+  that streams the model's output token-by-token as it writes the next change,
+  an **expandable** loop chat, and a **Governance in this project** panel that
+  lists every spamApply1 Be-Gone framework enforcing the build.
+
+Set `HARNESS_FOREVER=1` or pass `--forever` when you want the harness to keep
+retrying the same job until it lands a pass.
+
+### Keep it running forever (the keeper)
+
+`make up` also starts a **forever-keeper** in the background (run it on its own
+with `make keep`). The keeper:
+
+- makes sure a supervisor is running for every job that isn't green yet
+  (respecting any loop you paused or stopped), so **something is always
+  working**;
+- when every job is green — nothing left to build — writes a one-time **audit**
+  of what each loop achieved and posts it to the factory chat, then keeps
+  watching so new work is picked up immediately.
+
+By default the keeper launches loops on the fast `qwen2.5-coder:3b` so they stay
+responsive on CPU-only hosts (a large model that never emits a token is worse
+than a small one that keeps iterating). Override with `QAYMARK_KEEPER_MODEL`
+(set it empty to use each job's own pinned model).
+
+For anything load-bearing, use a persistent workspace path or an existing git
+repo; `/tmp` is fine for scratch work but not for durable projects.
+
+## Loop control (manage the factory without Copilot)
+
+The factory is a set of **loops** — supervised workspaces under the persistent
+factory root (`$XDG_STATE_HOME/qaymark`, override with `QAYMARK_FACTORY_ROOT`).
+Each loop is steered through a file-based **control channel**
+(`<workspace>/.harness/control.json`) that the supervisor reads every poll, so
+you decide which loops run and how — from the browser or the terminal, with no
+Copilot in the loop:
+
+- **Launch** a loop for any job in `jobs/` (pick the job, optional model).
+- **Pause / resume** — the loop idles instead of rebuilding.
+- **Redirect** — hand the loop a new task; it switches on the next cycle.
+- **Stop** — the loop exits cleanly (checked between attempts).
+- **Run all pending** — start every loop that isn't green yet.
+
+Loops are **relentless**: a loop that isn't fully green (validation + hygiene
+both passing) keeps trying instead of settling on "failed". To share one machine
+they **take turns** — only one loop generates at a time (a single factory turn),
+so the others show `waiting` until it's their turn. Green loops rest and only
+rebuild when you leave feedback or redirect them.
+
+From the terminal:
+
+```bash
+make loops CMD=jobs                        # list launchable jobs
+make loops CMD=list                        # list loops + their state
+make loops CMD=launch LOOP_ARGS="tetris-web --forever"
+make loops CMD=run-all                     # run every non-green loop (they take turns)
+make loops CMD=pause LOOP_ARGS=tetris-web
+make loops CMD=redirect LOOP_ARGS="tetris-web 'make the board 12 wide'"
+make loops CMD=stop LOOP_ARGS=tetris-web
+```
+
+Every one of these actions has a matching button in the dashboard (overview
+"Loop control" panel and each loop's console), because any feature the harness
+can do should be doable from the UI. The factory floor stays **human-readable**
+by contract — a fixed set of ordered lifecycle stations, one row per loop (no
+overlap), a bounded progress meter, and a flat, un-slanted scene whose depth
+comes from the cards, not a tilted plane — and a test (`floor_is_readable`)
+fails the build if that ever regresses.
 
 ## The hygiene manifest
 
@@ -196,7 +305,8 @@ cp .env.example .env
 | `RESET_WEBUI_DATA` | `0` | Wipe the WebUI DB on bootstrap (destructive) |
 | `HARNESS_MAX_ATTEMPTS` | `3` | One-shot attempts per run |
 | `HARNESS_ALLOW_COMMANDS` | `0` | Permit model `run_command` operations |
-| `HARNESS_USE_IDUD` | `1` | Build/use the idud reference bridge |
+| `HARNESS_USE_REFERENCE` | `1` | Build/use the drift reference bridge |
+| `HARNESS_FOREVER` | `0` | Keep retrying until the current job passes |
 | `DASHBOARD_USER` | `admin` | Sign-in username for the control plane |
 | `DASHBOARD_PASSWORD` | `qaymark` | Sign-in password for the control plane |
 

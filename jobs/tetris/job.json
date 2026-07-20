@@ -1,0 +1,7 @@
+{
+  "name": "tetris",
+  "description": "Headless Tetris core that passes the fixed acceptance tests.",
+  "validation": "python3 -m unittest test_tetris",
+  "model": "qwen2.5-coder:7b",
+  "max_attempts": 12
+}

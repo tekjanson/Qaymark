@@ -65,24 +65,26 @@ class LoopRulesTests(unittest.TestCase):
     def test_rules_folded_into_system_prompt(self) -> None:
         (self.tmp / ".harness").mkdir(parents=True, exist_ok=True)
         (self.tmp / ".harness" / "rules.md").write_text("- always use tabs", encoding="utf-8")
-        config = HarnessConfig(task="build", workspace=self.tmp, use_idud=False)
+        config = HarnessConfig(task="build", workspace=self.tmp, use_reference=False)
         config.max_attempts = 1
         with (
-            mock.patch.object(loop, "chat", return_value=_CLEAN_PAYLOAD) as chat,
+            mock.patch.object(loop.plan, "generate_plan", return_value=None),
+            mock.patch.object(loop, "ollama_chat", return_value=_CLEAN_PAYLOAD) as chat,
             mock.patch.object(loop, "ensure_slop_src", return_value=None),
-            mock.patch.object(loop, "ensure_idud_binary", return_value=None),
+            mock.patch.object(loop, "ensure_drift_src", return_value=None),
         ):
             loop.run_harness(config)
         system_prompt = chat.call_args[0][0]
         self.assertIn("always use tabs", system_prompt)
 
     def test_build_count_increments_on_pass(self) -> None:
-        config = HarnessConfig(task="build", workspace=self.tmp, use_idud=False)
+        config = HarnessConfig(task="build", workspace=self.tmp, use_reference=False)
         config.max_attempts = 1
         with (
-            mock.patch.object(loop, "chat", return_value=_CLEAN_PAYLOAD),
+            mock.patch.object(loop.plan, "generate_plan", return_value=None),
+            mock.patch.object(loop, "ollama_chat", return_value=_CLEAN_PAYLOAD),
             mock.patch.object(loop, "ensure_slop_src", return_value=None),
-            mock.patch.object(loop, "ensure_idud_binary", return_value=None),
+            mock.patch.object(loop, "ensure_drift_src", return_value=None),
         ):
             loop.run_harness(config)
         self.assertEqual(loop._read_build_count(config), 1)

@@ -50,6 +50,13 @@ def iter_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
+def _is_contract_file(rel: Path) -> bool:
+    """Acceptance tests/specs are the contract; the model must see them whole."""
+
+    name = rel.name.lower()
+    return "test" in name or "spec" in name or name == "task.md"
+
+
 def _snippet(path: Path, rel: Path, max_lines: int) -> str:
     if path.suffix.lower() not in TEXT_EXTENSIONS or path.stat().st_size >= 200_000:
         return f"=== {rel} ===\n<binary or too large>\n"
@@ -57,8 +64,14 @@ def _snippet(path: Path, rel: Path, max_lines: int) -> str:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return f"=== {rel} ===\n<unreadable>\n"
-    lines = text.splitlines()[:max_lines]
-    return f"=== {rel} ===\n" + "\n".join(lines) + "\n"
+    # Show acceptance tests/specs in full — they define exactly what to build,
+    # so truncating them to a preview makes the task impossible to satisfy.
+    limit = 400 if _is_contract_file(rel) else max_lines
+    lines = text.splitlines()
+    body = lines[:limit]
+    suffix = "" if len(lines) <= limit else f"\n... ({len(lines) - limit} more lines)"
+    label = f"=== {rel} (contract — full) ===" if _is_contract_file(rel) else f"=== {rel} ==="
+    return f"{label}\n" + "\n".join(body) + suffix + "\n"
 
 
 def summarize_workspace(root: Path, file_limit: int = 40, line_limit: int = 30) -> str:

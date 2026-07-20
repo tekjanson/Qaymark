@@ -1,4 +1,4 @@
-"""Provision the real slop-be-gone and idud tools in a shared cache."""
+"""Provision the real slop-be-gone and drift-be-gone tools in a shared cache."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from .config import IDUD_REPO_URL, SLOP_REPO_URL
+from .config import DRIFT_REPO_URL, SLOP_REPO_URL
 
 
 def _run(
@@ -43,22 +43,14 @@ def ensure_slop_src(cache_dir: Path) -> Path | None:
     return src if (src / "sbg").is_dir() else None
 
 
-def _idud_binary(clone: Path) -> Path:
-    return clone / "target" / "release" / "idud"
+def ensure_drift_src(cache_dir: Path) -> Path | None:
+    """Return the importable root of drift-be-gone, cloning if needed.
 
+    drift-be-gone is pure Python, so there is no build step (unlike the old
+    Rust idud tool): the clone root has an importable ``drift`` package.
+    """
 
-def ensure_idud_binary(cache_dir: Path, build: bool = True) -> Path | None:
-    """Return the idud release binary, cloning and building it once if needed."""
-
-    clone = cache_dir / "idud"
-    if not ensure_repo(IDUD_REPO_URL, clone):
+    clone = cache_dir / "drift-be-gone"
+    if not ensure_repo(DRIFT_REPO_URL, clone):
         return None
-    binary = _idud_binary(clone)
-    if binary.exists():
-        return binary
-    if not build:
-        return None
-    result = _run(["cargo", "build", "--release"], cwd=clone, timeout=1800)
-    if result.returncode != 0:
-        return None
-    return binary if binary.exists() else None
+    return clone if (clone / "drift").is_dir() else None

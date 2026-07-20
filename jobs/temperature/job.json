@@ -1,0 +1,7 @@
+{
+  "name": "temperature",
+  "description": "Two small temperature-conversion functions that pass fixed tests.",
+  "validation": "python3 -m unittest test_temperature",
+  "model": "qwen2.5-coder:3b",
+  "max_attempts": 6
+}

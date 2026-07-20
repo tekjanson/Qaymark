@@ -35,3 +35,4 @@ dist/
 # --- Node / editor cruft ---
 node_modules/
 .DS_Store
+/sbg-readme

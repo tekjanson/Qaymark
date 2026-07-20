@@ -1,4 +1,4 @@
-"""Orchestration: one-shot generation gated by hygiene + idud feedback."""
+"""Orchestration: one-shot generation gated by hygiene + reference feedback."""
 
 from __future__ import annotations
 
@@ -10,13 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import HarnessConfig
+from .control import read_control
+from . import chat, plan
 from .hygiene import HygieneResult, fallback_scan, run_sbg
-from .idud_bridge import IdudResult, run_idud
 from .jsonio import extract_json_payload
-from .ollama_client import chat
+from .ollama_client import chat as ollama_chat
 from .operations import apply_operations
 from .prompt import build_system_prompt, build_user_prompt, load_rule_digest, synthesize_feedback
-from .references import ensure_idud_binary, ensure_slop_src
+from .reference_bridge import ReferenceResult, run_map
+from .references import ensure_drift_src, ensure_slop_src
 from .report import AttemptReport
 from .workspace import ensure_sbgignore, iter_files, seed_workspace, summarize_workspace
 
@@ -24,7 +26,7 @@ from .workspace import ensure_sbgignore, iter_files, seed_workspace, summarize_w
 @dataclass
 class Tools:
     slop_src: Path | None
-    idud_binary: Path | None
+    drift_src: Path | None
 
 
 def _status_path(config: HarnessConfig) -> Path:
@@ -73,6 +75,26 @@ def _augment_system_with_rules(config: HarnessConfig, system: str) -> str:
     )
 
 
+def _goal_from_task(task: str) -> str:
+    for line in task.splitlines():
+        cleaned = line.strip().lstrip("#").strip()
+        if cleaned:
+            return cleaned[:200]
+    return "Deliver the task"
+
+
+def _augment_system_with_plan(config: HarnessConfig, system: str) -> str:
+    text = plan.plan_prompt_text(plan.read_plan(config.workspace))
+    if not text:
+        return system
+    return (
+        f"{system}\n\nThe operator is steering you with this plan — honour the "
+        f"current focus step and the goal, but ALWAYS return COMPLETE, runnable "
+        f"files (never an empty file or a stub, even if a step sounds "
+        f"incremental):\n{text}"
+    )
+
+
 def _build_count_path(config: HarnessConfig) -> Path:
     return config.artifact_dir() / "build_count"
 
@@ -113,6 +135,7 @@ def _write_status(
         "workspace": str(config.workspace),
         "attempt": attempt,
         "max_attempts": config.max_attempts,
+        "loop_forever": config.loop_forever,
         "build": _read_build_count(config),
     }
     if report is not None:
@@ -123,7 +146,7 @@ def _write_status(
                 "hygiene_passed": report.hygiene.passed,
                 "hygiene_degraded": report.hygiene.degraded,
                 "hygiene_violations": len(report.hygiene.violations),
-                "idud_available": report.idud.available,
+                "reference_available": report.reference.available,
                 "written": report.operations.written,
                 "skipped": report.operations.skipped,
             }
@@ -131,6 +154,17 @@ def _write_status(
     path = _status_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if phase == "passed":
+        _write_green_marker(config)
+
+
+def _write_green_marker(config: HarnessConfig) -> None:
+    """Record a durable proof-of-green so a later 'watching'/'reverted' status
+    (files rolled back to the last good build) is never misread as not-green."""
+
+    marker = config.artifact_dir() / "green.json"
+    payload = {"build": _read_build_count(config), "task": config.task}
+    marker.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _fallback_python_solution() -> list[dict[str, object]]:
@@ -264,10 +298,19 @@ def fallback_operations(task: str) -> list[dict[str, object]]:
     return _fallback_python_solution()
 
 
+def _fallback_payload(task: str, error: str | None = None) -> dict[str, object]:
+    """A deterministic fallback payload when the model service is unavailable."""
+
+    summary = "fallback: Ollama unavailable"
+    if error:
+        summary = f"{summary} ({error})"
+    return {"summary": summary, "operations": fallback_operations(task)}
+
+
 def provision(config: HarnessConfig) -> Tools:
     slop_src = ensure_slop_src(config.cache_dir)
-    idud_binary = ensure_idud_binary(config.cache_dir) if config.use_idud else None
-    return Tools(slop_src=slop_src, idud_binary=idud_binary)
+    drift_src = ensure_drift_src(config.cache_dir) if config.use_reference else None
+    return Tools(slop_src=slop_src, drift_src=drift_src)
 
 
 def run_validation(root: Path, command: str) -> subprocess.CompletedProcess[str]:
@@ -318,15 +361,38 @@ def run_hygiene(config: HarnessConfig, tools: Tools) -> HygieneResult:
     return fallback_scan(config.workspace, iter_files(config.workspace))
 
 
-def run_reference(config: HarnessConfig, tools: Tools) -> IdudResult:
-    if tools.idud_binary is None:
-        return IdudResult(error="idud disabled or unavailable")
-    output = config.artifact_dir() / "idud_understanding.json"
-    return run_idud(tools.idud_binary, config.workspace, output)
+def run_reference(config: HarnessConfig, tools: Tools) -> ReferenceResult:
+    if tools.drift_src is None:
+        return ReferenceResult(error="drift reference disabled or unavailable")
+    output = config.artifact_dir() / "drift_understanding.json"
+    return run_map(tools.drift_src, config.workspace, output)
 
 
 def _generate(config: HarnessConfig, system: str, user: str) -> dict[str, object]:
-    response = chat(system, user, config.model, config.base_url, config.request_timeout)
+    artifact = config.artifact_dir()
+    artifact.mkdir(parents=True, exist_ok=True)
+    live = artifact / "generation.txt"
+    state = artifact / "generation.state"
+    live.write_text("", encoding="utf-8")
+    state.write_text("active", encoding="utf-8")
+    handle = live.open("a", encoding="utf-8")
+
+    def on_delta(chunk: str) -> None:
+        handle.write(chunk)
+        handle.flush()
+
+    response: str | None = None
+    try:
+        response = ollama_chat(
+            system, user, config.model, config.base_url, on_delta=on_delta
+        )
+    except OSError as exc:
+        print(f"ollama unavailable, using built-in fallback: {exc}", file=sys.stderr)
+    finally:
+        handle.close()
+        state.write_text("done", encoding="utf-8")
+    if response is None:
+        return _fallback_payload(config.task, "ollama unavailable")
     try:
         payload = extract_json_payload(response)
     except ValueError:
@@ -347,7 +413,7 @@ def _persist(config: HarnessConfig, report: AttemptReport, payload: dict[str, ob
         "hygiene_passed": report.hygiene.passed,
         "hygiene_degraded": report.hygiene.degraded,
         "violation_count": len(report.hygiene.violations),
-        "idud_available": report.idud.available,
+        "reference_available": report.reference.available,
         "written": report.operations.written,
         "skipped": report.operations.skipped,
     }
@@ -366,12 +432,76 @@ def _attempt(
     ensure_sbgignore(config.workspace)
     validation = run_validation(config.workspace, config.validation_command)
     hygiene = run_hygiene(config, tools)
-    idud = run_reference(config, tools)
+    reference = run_reference(config, tools)
     validation_output = (validation.stdout + "\n" + validation.stderr).strip()
     ok = validation.returncode == 0
-    report = AttemptReport(attempt, ok, validation_output, hygiene, idud, outcome)
+    report = AttemptReport(attempt, ok, validation_output, hygiene, reference, outcome)
     _persist(config, report, payload)
     return report
+
+
+def _chat_summary(report: AttemptReport) -> str:
+    """A short, human-facing line about why the attempt did not go green."""
+
+    if not report.validation_ok:
+        first = report.validation_output.strip().splitlines()
+        head = first[0][:160] if first else "validation command failed"
+        return f"Attempt {report.attempt}: tests failing — {head}"
+    violations = report.hygiene.violations
+    if violations:
+        top = violations[0]
+        rule = top.get("rule_id", "?")
+        path = top.get("path", "?")
+        count = len(violations)
+        return f"Attempt {report.attempt}: hygiene — {count} issue(s), e.g. [{rule}] {path}"
+    return f"Attempt {report.attempt}: not green yet, retrying."
+
+
+def _attempt_limit(config: HarnessConfig) -> int | None:
+    if config.loop_forever or config.max_attempts <= 0:
+        return None
+    return config.max_attempts
+
+
+def _run_attempts(config: HarnessConfig, tools: Tools, system: str) -> int:
+    feedback: str | None = None
+    attempt = 1
+    limit = _attempt_limit(config)
+    while limit is None or attempt <= limit:
+        if read_control(config.workspace).stop:
+            _write_status(config, "stopped", attempt)
+            print("harness: stop requested, halting between attempts", flush=True)
+            return 1
+        feedback = _merge_feedback(_load_external_feedback(config), feedback)
+        _write_status(config, "attempting", attempt)
+        plan.set_focus_note(config.workspace, f"Attempt {attempt}: generating a change.")
+        chat.post(config.workspace, "loop", f"Attempt {attempt}: generating a change.")
+        print(f"== attempt {attempt}/{limit or '∞'} ==", flush=True)
+        try:
+            report = _attempt(config, tools, system, feedback, attempt)
+        except OSError as exc:
+            print(f"attempt {attempt} errored (continuing): {exc}", file=sys.stderr)
+            feedback = f"Attempt {attempt} did not finish ({exc}). Regenerate a complete file."
+            chat.post(config.workspace, "loop", f"Attempt {attempt} errored: {exc}")
+            attempt += 1
+            continue
+        if report.passed():
+            _bump_build_count(config)
+            _write_status(config, "passed", attempt, report)
+            plan.set_focus_note(config.workspace, "Green — all gates pass.")
+            chat.post(config.workspace, "loop", f"Green on attempt {attempt}: all gates pass.")
+            print(f"✅ guardrails passed on attempt {attempt}", flush=True)
+            return 0
+        feedback = synthesize_feedback(report, config.workspace)
+        plan.set_focus_note(config.workspace, _chat_summary(report))
+        chat.post(config.workspace, "loop", _chat_summary(report))
+        _write_status(config, "retrying", attempt, report)
+        print(feedback, flush=True)
+        attempt += 1
+
+    _write_status(config, "failed")
+    print("harness reached the maximum number of guardrailed attempts", file=sys.stderr)
+    return 1
 
 
 def run_harness(config: HarnessConfig) -> int:
@@ -381,31 +511,21 @@ def run_harness(config: HarnessConfig) -> int:
     config.protected = frozenset(seed_workspace(config.workspace, config.seed_dir))
     seed_workspace(config.workspace, config.starter_dir)  # starter files stay editable
     ensure_sbgignore(config.workspace)
+    plan.bootstrap_plan(
+        config.workspace,
+        _goal_from_task(config.task),
+        plan.PlanSeed(
+            task=config.task,
+            snapshot=summarize_workspace(config.workspace),
+            rule_digest=load_rule_digest(config.manifest_path),
+            model=config.model,
+            base_url=config.base_url,
+            timeout=config.request_timeout,
+        ),
+    )
     tools = provision(config)
     system = build_system_prompt(load_rule_digest(config.manifest_path))
     system = _augment_system_with_rules(config, system)
-    feedback: str | None = None
+    system = _augment_system_with_plan(config, system)
     _write_status(config, "starting")
-
-    for attempt in range(1, config.max_attempts + 1):
-        feedback = _merge_feedback(_load_external_feedback(config), feedback)
-        _write_status(config, "attempting", attempt)
-        print(f"== attempt {attempt}/{config.max_attempts} ==", flush=True)
-        try:
-            report = _attempt(config, tools, system, feedback, attempt)
-        except OSError as exc:
-            print(f"attempt {attempt} errored (continuing): {exc}", file=sys.stderr)
-            feedback = f"Attempt {attempt} did not finish ({exc}). Regenerate a complete file."
-            continue
-        if report.passed():
-            _bump_build_count(config)
-            _write_status(config, "passed", attempt, report)
-            print(f"✅ guardrails passed on attempt {attempt}", flush=True)
-            return 0
-        feedback = synthesize_feedback(report, config.workspace)
-        _write_status(config, "retrying", attempt, report)
-        print(feedback, flush=True)
-
-    _write_status(config, "failed")
-    print("harness reached the maximum number of guardrailed attempts", file=sys.stderr)
-    return 1
+    return _run_attempts(config, tools, system)
