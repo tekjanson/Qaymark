@@ -106,8 +106,15 @@ def _latest_attempt(workspace: Path) -> dict:
 
 
 def is_green(workspace: Path) -> bool:
-    """A loop is green when its last completed build passed every gate."""
+    """A loop is green when its last completed build passed every gate.
 
+    A durable ``green.json`` marker (written on pass, cleared on redirect) keeps
+    a reverted-to-last-good workspace green even when the live status has since
+    moved to ``watching``/``reverted`` and the newest attempt record failed.
+    """
+
+    if (workspace / ARTIFACT_DIR_NAME / "green.json").exists():
+        return True
     if _loop_phase(workspace).get("phase") == "passed":
         return True
     attempt = _latest_attempt(workspace)
@@ -146,7 +153,10 @@ def list_loops(root: Path | None = None) -> list[dict]:
     return [loop_state(workspace, root) for workspace in _discover_workspaces(root)]
 
 
-def _launch_command(job: Job, workspace: Path, model: str | None, forever: bool) -> list[str]:
+def _launch_command(
+    job: Job, workspace: Path, model: str | None, forever: bool,
+    attempts: int | None = None,
+) -> list[str]:
     command = [
         sys.executable,
         str(_HARNESS_ENTRY),
@@ -157,7 +167,7 @@ def _launch_command(job: Job, workspace: Path, model: str | None, forever: bool)
         "--validation-command",
         job.validation,
         "--max-attempts",
-        str(job.max_attempts),
+        str(attempts if attempts and attempts > 0 else job.max_attempts),
         "--supervise",
     ]
     if job.seed is not None:
@@ -173,12 +183,15 @@ def _launch_command(job: Job, workspace: Path, model: str | None, forever: bool)
 
 
 def launch_loop(
-    name: str, model: str | None = None, forever: bool = False, root: Path | None = None
+    name: str, model: str | None = None, forever: bool = False, root: Path | None = None,
+    attempts: int | None = None,
 ) -> int:
     """Start a supervised loop for *name* as a detached local process.
 
     Returns the child PID. Refuses to start a second loop for a workspace that
-    already has a live supervisor.
+    already has a live supervisor. When *forever* is false the loop yields after
+    *attempts* (or the job default) tries, so no single job can monopolise a
+    shared worker slot forever.
     """
 
     job = get_job(name)
@@ -190,7 +203,7 @@ def launch_loop(
     workspace.mkdir(parents=True, exist_ok=True)
     control.write_control(workspace, control.LoopControl())
     log = (workspace / ARTIFACT_DIR_NAME / "supervisor.log").open("a", encoding="utf-8")
-    command = _launch_command(job, workspace, model, forever)
+    command = _launch_command(job, workspace, model, forever, attempts)
     process = subprocess.Popen(
         command, cwd=str(REPO_ROOT), stdout=log, stderr=log, start_new_session=True
     )

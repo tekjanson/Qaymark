@@ -71,6 +71,18 @@ class LoopTests(unittest.TestCase):
         self.assertTrue((self.tmp / "app.js").exists())
         self.assertTrue((self.tmp / "styles.css").exists())
 
+    def test_unavailable_ollama_uses_fallback_stub(self) -> None:
+        with mock.patch.object(loop.plan, "generate_plan", return_value=None), mock.patch.object(
+            loop, "ollama_chat", side_effect=OSError("boom")
+        ), mock.patch.object(
+            loop, "ensure_slop_src", return_value=None
+        ), mock.patch.object(loop, "ensure_drift_src", return_value=None):
+            config = HarnessConfig(task="add two numbers", workspace=self.tmp, use_reference=False)
+            config.max_attempts = 1
+            code = loop.run_harness(config)
+        self.assertEqual(code, 0)
+        self.assertTrue((self.tmp / "solution.py").exists())
+
     def test_fallback_stub_is_clean_for_long_tasks(self) -> None:
         # Build banned tokens via concatenation so they exist in the runtime
         # task string but never appear literally in this test's source.

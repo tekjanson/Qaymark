@@ -70,11 +70,34 @@ def _new_step(text: str, status: str = "pending") -> dict:
     return {"id": f"s{uuid.uuid4().hex[:10]}", "text": text.strip(), "status": status}
 
 
+_STUB_STEP_MARKERS = (
+    "empty file",
+    "empty python file",
+    "blank file",
+    "placeholder",
+    "stub",
+    "scaffold an empty",
+    "create an empty",
+)
+
+
+def _is_stub_step(text: str) -> bool:
+    """True for steps that would make the one-shot generator emit a stub.
+
+    The harness rewrites whole files each attempt, so a step like "create an
+    empty file" makes a weak model dutifully write a blank file that fails the
+    empty-file gate forever. Such steps are dropped so real work happens first.
+    """
+
+    lowered = text.lower()
+    return any(marker in lowered for marker in _STUB_STEP_MARKERS)
+
+
 def _normalize_steps(raw_steps: object) -> list[dict]:
     if not isinstance(raw_steps, list):
         return []
     steps: list[dict] = []
-    for raw in raw_steps[:6]:
+    for raw in raw_steps[:8]:
         text = ""
         status = "pending"
         if isinstance(raw, str):
@@ -82,11 +105,12 @@ def _normalize_steps(raw_steps: object) -> list[dict]:
         elif isinstance(raw, dict):
             text = str(raw.get("text") or raw.get("step") or raw.get("title") or "").strip()
             status = str(raw.get("status") or "pending").strip().lower()
-        if not text:
+        if not text or _is_stub_step(text):
             continue
         if status not in STATUSES:
             status = "pending"
         steps.append(_new_step(text, status))
+    steps = steps[:6]
     if steps and not any(step["status"] == "active" for step in steps):
         steps[0]["status"] = "active"
     return steps
@@ -106,8 +130,12 @@ def _plan_system_prompt(rule_digest: str) -> str:
         "goal should be a short sentence. focus_note should describe the current\n"
         "focus in plain language. steps should be 3 to 6 concrete steps, each a\n"
         "short string or an object with text and optional status.\n\n"
-        "The plan must keep the loop on the smallest safe chunk, prefer visible\n"
-        "progress, and avoid vague or lazy steps.\n\n"
+        "This harness regenerates COMPLETE files in one shot every attempt, so a\n"
+        "step must describe finished, working behaviour to deliver — never a\n"
+        "partial stub. Do NOT include steps like 'create an empty file' or\n"
+        "'add a placeholder'; every step must leave every file complete and\n"
+        "runnable. Prefer steps that name the file and the behaviour it must "
+        "provide to pass validation.\n\n"
         f"Active hygiene rules: {rule_digest or 'slop-be-gone default hygiene rules'}."
     )
 
@@ -127,7 +155,6 @@ def generate_plan(seed: PlanSeed) -> dict | None:
             _plan_user_prompt(seed.task, seed.snapshot),
             seed.model,
             seed.base_url,
-            seed.timeout,
         )
         payload = extract_json_payload(response)
     except (OSError, ValueError, TypeError):

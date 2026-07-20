@@ -163,6 +163,47 @@ class LoopControlApiTests(unittest.TestCase):
             dashboard._apply_loop_control(self.root, {"name": "demo", "action": "nope"})
 
 
+class BindServerTests(unittest.TestCase):
+    """`make up` must not crash when its port is already in use."""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+
+    def _handler(self):
+        from functools import partial
+
+        return partial(dashboard.DashboardHandler, root=self.root)
+
+    def test_busy_port_falls_back_to_a_free_port(self) -> None:
+        import socket
+
+        taken = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        busy = taken.getsockname()[1]
+        try:
+            server = dashboard._bind_server(self._handler(), busy)
+        finally:
+            taken.close()
+        try:
+            self.assertNotEqual(server.server_address[1], busy)
+            self.assertGreater(server.server_address[1], 0)
+        finally:
+            server.server_close()
+
+    def test_free_port_is_used_directly(self) -> None:
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            free = probe.getsockname()[1]
+        server = dashboard._bind_server(self._handler(), free)
+        try:
+            self.assertEqual(server.server_address[1], free)
+        finally:
+            server.server_close()
+
+
 class ConsoleShellTests(unittest.TestCase):
     def test_console_shell_exposes_plan_and_control_state(self) -> None:
         self.assertIn('id="loop-state"', dashboard.CONSOLE_SHELL)

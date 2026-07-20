@@ -23,6 +23,19 @@ class WorkspaceTests(unittest.TestCase):
     def test_summarize_reports_empty(self) -> None:
         self.assertEqual(summarize_workspace(self.root), "<empty workspace>")
 
+    def test_contract_test_files_are_shown_in_full(self) -> None:
+        long_test = "\n".join(f"assert x == {i}" for i in range(120))
+        (self.root / "test_thing.py").write_text(long_test + "\n", encoding="utf-8")
+        (self.root / "thing.py").write_text("\n".join(f"a{i} = {i}" for i in range(120)) + "\n",
+                                            encoding="utf-8")
+        snap = summarize_workspace(self.root)
+        # The acceptance test is the contract → shown in full (all 120 lines).
+        self.assertIn("contract — full", snap)
+        self.assertIn("assert x == 119", snap)
+        # A regular source file is still previewed/truncated.
+        self.assertIn("more lines)", snap)
+        self.assertNotIn("a119 = 119", snap)
+
     def test_ensure_sbgignore_is_idempotent(self) -> None:
         ensure_sbgignore(self.root)
         first = (self.root / ".sbgignore").read_text(encoding="utf-8")

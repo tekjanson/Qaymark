@@ -55,21 +55,34 @@ way for anything to exist.
 - Docker + Docker Compose v2
 - Python 3.10+
 - `git`, and (optional) `cargo` for the idud reference bridge
-- A running Ollama with a coding model pulled (the runtime below does this)
+- A running Ollama with a coding model pulled is optional; `make up` uses a built-in fallback when the model service is unavailable.
 
 ## Quick start
 
-Start the runtime and pull the default model:
+Start the whole system with a single command:
 
 ```bash
 make up
 ```
 
-- Open WebUI: <http://localhost:8095>  (moved off `3000` to avoid clashing with
-  dev servers such as Waymark)
-- Ollama API: <http://localhost:11434>
-- Control plane: `make dashboard ROOT=/tmp/qaymark-dashboard` with
-  `DASHBOARD_USER` / `DASHBOARD_PASSWORD`
+`make up` brings up everything you need in one shot:
+
+- **Model runtime** — starts Ollama + Open WebUI if they aren't already
+  reachable (skip with `QAYMARK_NO_RUNTIME=1`; the harness still has a built-in
+  fallback if the model service is down).
+- **Control plane UI** — serves the signed-in dashboard where you can launch
+  loops, steer them, give feedback, and edit governance rules. It prints the URL
+  and the login (defaults: user `admin`, password `qaymark`; override with
+  `DASHBOARD_USER` / `DASHBOARD_PASSWORD`, and the port with `PORT`).
+- Open WebUI: <http://localhost:8095>, Ollama API: <http://localhost:11434>.
+
+To run just the offline one-shot harness on your last-used workspace, use
+`make demo`; to start only the Docker runtime, use `make runtime`.
+
+- `make demo` remembers the last workspace you used and reuses it by default
+  (override with `HARNESS_WORKSPACE=/path`); the default task flips to a Tetris
+  browser build when that path contains `tetris`, otherwise the simple Python
+  demo (override with `HARNESS_TASK="..."`).
 
 Run the guardrailed harness against a workspace:
 
@@ -164,8 +177,43 @@ root, shows a global overview (total / running / passed / failed), a **reactive
 3D factory floor** where each loop sits at its current lifecycle station, and
 lets you submit feedback that drives the supervisor's next rebuild.
 
+### Make it your own dashboard
+
+Every page is a rearrangeable, pinnable board so you can watch what you want,
+how you want:
+
+- **Rearrange** — drag any card by its handle to reorder the layout; the order
+  is remembered per page in your browser.
+- **Pin** — pin the cards you care about, then hit **My dashboard** in the
+  top-right to collapse the view down to just those. **Reset layout** clears it.
+- **Factory copilot** — a persistent chat dock (bottom-right, on every page)
+  talks to the model and can *drive the factory*: type a question, or a command
+  like `/launch tetris-web`, `/run-all`, `/redirect <loop> <task>`, or
+  `/feedback <loop> <text>`.
+- **Watch it think** — each workspace console has a **Live generation** panel
+  that streams the model's output token-by-token as it writes the next change,
+  an **expandable** loop chat, and a **Governance in this project** panel that
+  lists every spamApply1 Be-Gone framework enforcing the build.
+
 Set `HARNESS_FOREVER=1` or pass `--forever` when you want the harness to keep
 retrying the same job until it lands a pass.
+
+### Keep it running forever (the keeper)
+
+`make up` also starts a **forever-keeper** in the background (run it on its own
+with `make keep`). The keeper:
+
+- makes sure a supervisor is running for every job that isn't green yet
+  (respecting any loop you paused or stopped), so **something is always
+  working**;
+- when every job is green — nothing left to build — writes a one-time **audit**
+  of what each loop achieved and posts it to the factory chat, then keeps
+  watching so new work is picked up immediately.
+
+By default the keeper launches loops on the fast `qwen2.5-coder:3b` so they stay
+responsive on CPU-only hosts (a large model that never emits a token is worse
+than a small one that keeps iterating). Override with `QAYMARK_KEEPER_MODEL`
+(set it empty to use each job's own pinned model).
 
 For anything load-bearing, use a persistent workspace path or an existing git
 repo; `/tmp` is fine for scratch work but not for durable projects.

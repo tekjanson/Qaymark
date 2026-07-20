@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import errno
 import hashlib
 import hmac
 import html
@@ -27,6 +28,7 @@ from qaymark import control  # noqa: E402  (path set up above)
 from qaymark import frameworks as fw  # noqa: E402  (path set up above)
 from qaymark import orchestrator  # noqa: E402  (path set up above)
 from qaymark import plan as plan_mod  # noqa: E402  (path set up above)
+from qaymark.ollama_client import chat as ollama_chat  # noqa: E402  (path set up above)
 
 COOKIE_NAME = "qaymark_session"
 COOKIE_TTL = 60 * 60 * 12
@@ -40,8 +42,59 @@ HTML_SHELL = """<!doctype html>
     <title>Qaymark Control Plane</title>
     <style>
       body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { max-width: 1300px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
-      .card { background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 16px; }
+      body {
+        background:
+          radial-gradient(1200px 600px at 12% -8%, rgba(139,92,246,.18), transparent 60%),
+          radial-gradient(1000px 620px at 108% 0%, rgba(34,211,238,.14), transparent 55%),
+          #0b1220;
+      }
+      main {
+        margin: 0;
+        padding: 18px clamp(16px, 3vw, 40px) 40px;
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        grid-auto-rows: minmax(8px, auto);
+        grid-auto-flow: dense;
+        align-items: start;
+      }
+      .span-3 { grid-column: span 3; }
+      .span-4 { grid-column: span 4; }
+      .span-5 { grid-column: span 5; }
+      .span-6 { grid-column: span 6; }
+      .span-7 { grid-column: span 7; }
+      .span-8 { grid-column: span 8; }
+      .span-9 { grid-column: span 9; }
+      .span-12 { grid-column: 1 / -1; }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: linear-gradient(180deg, rgba(17,24,39,.96), rgba(17,24,39,.82));
+        backdrop-filter: blur(6px);
+      }
+      @media (max-width: 1180px) {
+        main { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .span-3, .span-4 { grid-column: span 3; }
+        .span-5, .span-6, .span-7, .span-8, .span-9 { grid-column: span 6; }
+      }
+      @media (max-width: 720px) {
+        main { grid-template-columns: 1fr; }
+        [class*="span-"] { grid-column: 1 / -1; }
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(23,32,52,.96), rgba(15,23,42,.96));
+        border: 1px solid #334155;
+        border-radius: 18px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 28px rgba(2,6,23,.35);
+        transition: border-color .2s ease, transform .2s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .card:hover { border-color: rgba(139,92,246,.45); }
+      .card h2 { margin: 0; font-size: 1.05rem; }
       pre {
         white-space: pre-wrap;
         word-break: break-word;
@@ -63,8 +116,8 @@ HTML_SHELL = """<!doctype html>
       .bad { color: #fca5a5; }
       .grid {
         display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
       }
       .factory-wrap {
         position: relative;
@@ -235,26 +288,26 @@ HTML_SHELL = """<!doctype html>
   </head>
   <body>
     <main>
-      <section class="card">
-        <div class="row">
+      <section class="card span-12 topbar">
+        <div class="row" style="justify-content:space-between">
           <h1 style="margin:0">Qaymark Control Plane</h1>
           <span class="small"><a href="/governance">Governance</a> &middot;
             <a href="/logout">Sign out</a></span>
         </div>
         <div id="meta" class="muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-4">
         <h2>Global view</h2>
         <div id="summary" class="muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-8">
         <div class="row" style="justify-content:space-between">
           <h2 style="margin:0">Factory floor</h2>
           <span class="muted">The loop as a reactive 3D map</span>
         </div>
         <div id="factory-floor" class="factory-wrap muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-7">
         <div class="row" style="justify-content:space-between">
           <h2 style="margin:0">Loop control</h2>
           <span class="muted">Pick which loops run; pause, redirect, or stop them</span>
@@ -271,7 +324,7 @@ HTML_SHELL = """<!doctype html>
         <div id="launch-note" class="small muted"></div>
         <div id="loops" class="muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-5">
         <div class="row" style="justify-content:space-between">
           <h2 style="margin:0">Governance</h2>
           <a href="/governance">Open drill-down &rarr;</a>
@@ -279,11 +332,11 @@ HTML_SHELL = """<!doctype html>
         <p class="muted">The be-gone frameworks that gate every build.</p>
         <div id="governance" class="muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-8">
         <h2>Workspaces</h2>
         <div id="workspaces" class="muted">Loading...</div>
       </section>
-      <section class="card">
+      <section class="card span-4">
         <h2>Feedback</h2>
         <p class="muted">Leave a note here and the next harness attempt will read it.</p>
         <div class="row">
@@ -293,7 +346,7 @@ HTML_SHELL = """<!doctype html>
         <textarea id="feedback-text" rows="6" style="width:100%;margin-top:10px"></textarea>
         <div id="feedback-status" class="muted"></div>
       </section>
-      <section class="card">
+      <section class="card span-12">
         <h2>Raw status</h2>
         <pre id="status">Waiting for data...</pre>
       </section>
@@ -579,8 +632,36 @@ CONSOLE_SHELL = """<!doctype html>
     <title>Qaymark Console</title>
     <style>
       body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { max-width: 1300px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
-      .card { background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 16px; }
+      main {
+        margin: 0;
+        padding: 18px clamp(16px, 3vw, 40px) 40px;
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        grid-auto-rows: minmax(8px, auto);
+        grid-auto-flow: dense;
+        align-items: start;
+      }
+      .span-4 { grid-column: span 4; }
+      .span-6 { grid-column: span 6; }
+      .span-8 { grid-column: span 8; }
+      .span-12 { grid-column: 1 / -1; }
+      @media (max-width: 1180px) {
+        main { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .span-4 { grid-column: span 3; }
+        .span-6, .span-8 { grid-column: span 6; }
+      }
+      @media (max-width: 720px) {
+        main { grid-template-columns: 1fr; }
+        [class*="span-"] { grid-column: 1 / -1; }
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(23,32,52,.96), rgba(15,23,42,.96));
+        border: 1px solid #334155;
+        border-radius: 18px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 28px rgba(2,6,23,.35);
+      }
       .cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       a { color: #93c5fd; }
       h1, h2 { margin: 0 0 8px; }
@@ -714,6 +795,20 @@ CONSOLE_SHELL = """<!doctype html>
         flex-direction: column;
         gap: 8px;
       }
+      .card.qm-expanded { grid-column: 1 / -1; }
+      .card.qm-expanded .chat-log { max-height: 60vh; }
+      .card.qm-expanded .chat-msg { max-width: 70%; font-size: 1rem; }
+      #gen-live {
+        max-height: 280px;
+        overflow: auto;
+        margin: 0;
+        background: #020617;
+        border-radius: 12px;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #gen-live.live { border: 1px solid rgba(34,211,238,.5); }
       .chat-msg {
         border-radius: 12px;
         padding: 8px 12px;
@@ -732,19 +827,25 @@ CONSOLE_SHELL = """<!doctype html>
   </head>
   <body>
     <main>
-      <div class="card">
+      <div class="card span-12">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h1 id="title">Qaymark Console</h1>
           <a href="/">Back to overview</a>
         </div>
         <div id="status" class="muted">Loading...</div>
       </div>
-      <div class="card">
+      <div class="card span-8">
         <h2>Loop map</h2>
         <div class="muted">Where the model is in the loop, now, in a 3D factory floor view.</div>
         <div id="loop-map" class="factory-wrap">Loading...</div>
       </div>
-      <div class="card">
+      <div class="card span-4">
+        <h2>Live generation</h2>
+        <p class="muted">Watch the model write the next change as it happens.</p>
+        <div id="gen-state" class="status-line"></div>
+        <pre id="gen-live">Waiting for the next generation...</pre>
+      </div>
+      <div class="card span-4">
         <h2>Loop control</h2>
         <p class="muted">Steer this loop directly — no terminal, no Copilot.</p>
         <div id="loop-state" class="status-line"></div>
@@ -759,7 +860,7 @@ CONSOLE_SHELL = """<!doctype html>
         </div>
         <div id="loop-note" class="note muted"></div>
       </div>
-      <div class="card">
+      <div class="card span-6">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h2 style="margin:0">Plan</h2>
           <span id="plan-focus" class="muted"></span>
@@ -778,8 +879,12 @@ CONSOLE_SHELL = """<!doctype html>
         </div>
         <div id="plan-note" class="note muted"></div>
       </div>
-      <div class="card">
-        <h2>Chat with this loop</h2>
+      <div class="card span-6" id="chat-card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Chat with this loop</h2>
+          <button id="chat-expand" type="button" data-action="expand-chat"
+            style="padding:4px 10px">Expand</button>
+        </div>
         <p class="muted">The loop narrates what it is doing. Reply to steer it —
           plain text becomes feedback; start with <code>/redirect</code> to hand
           it a new task.</p>
@@ -792,7 +897,16 @@ CONSOLE_SHELL = """<!doctype html>
           <span id="chat-note" class="note muted"></span>
         </form>
       </div>
-      <div class="cols">
+      <div class="card span-6" id="governance-card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Governance in this project</h2>
+          <a href="/governance">Drill down &rarr;</a>
+        </div>
+        <p class="muted">Every spamApply1 Be-Gone framework enforced on this
+          workspace's builds. All of them are on by default.</p>
+        <div id="ws-governance" class="muted">Loading...</div>
+      </div>
+      <div class="cols span-12">
         <div class="card">
           <h2>Live preview</h2>
           <div id="preview-wrap" class="muted">No preview for this workspace.</div>
@@ -1074,12 +1188,66 @@ CONSOLE_SHELL = """<!doctype html>
         planOp({ op: 'update-step', step: li.dataset.step, status: event.target.value });
       });
 
+      async function loadGeneration() {
+        try {
+          const res = await fetch('/api/generation.json?ws=' + encodeURIComponent(ws),
+            { cache: 'no-store' });
+          const data = await res.json();
+          const live = document.getElementById('gen-live');
+          const state = document.getElementById('gen-state');
+          const atBottom = live.scrollHeight - live.scrollTop - live.clientHeight < 40;
+          const waiting = data.phase === 'waiting';
+          let hint = 'Waiting for the next generation...';
+          if (waiting) hint = 'Waiting for its turn — loops generate one at a time.';
+          live.textContent = data.text || hint;
+          live.classList.toggle('live', !!data.active);
+          let label = 'idle';
+          if (data.active) label = 'generating now';
+          else if (waiting) label = 'waiting for turn';
+          else if (data.stale) label = 'paused mid-generation';
+          state.innerHTML = '<span class="pill">' + label + '</span>'
+            + '<span class="pill">' + (data.chars || 0) + ' chars</span>';
+          if (atBottom) live.scrollTop = live.scrollHeight;
+        } catch (e) { return; }
+      }
+
+      async function loadWsGovernance() {
+        try {
+          const res = await fetch('/api/frameworks.json', { cache: 'no-store' });
+          const data = await res.json();
+          const rows = (data.frameworks || []).map((f) =>
+            '<tr><td><a href="/governance">' + f.name + '</a></td>'
+            + '<td>' + f.domain + '</td>'
+            + '<td>' + f.enabled_count + '/' + f.rule_count + ' rules</td></tr>').join('');
+          document.getElementById('ws-governance').innerHTML =
+            '<table><thead><tr><th>Framework</th><th>Domain</th>'
+            + '<th>Enforced</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        } catch (e) { return; }
+      }
+
+      const expandBtn = document.getElementById('chat-expand');
+      const expandKey = 'qm-chat-expanded:' + ws;
+      function setChatExpanded(on) {
+        document.getElementById('chat-card').classList.toggle('qm-expanded', on);
+        expandBtn.textContent = on ? 'Collapse' : 'Expand';
+        try { localStorage.setItem(expandKey, on ? '1' : ''); } catch (e) { return; }
+      }
+      expandBtn.addEventListener('click', () => {
+        const card = document.getElementById('chat-card');
+        setChatExpanded(!card.classList.contains('qm-expanded'));
+      });
+      try { if (localStorage.getItem(expandKey)) setChatExpanded(true); } catch (e) { /* skip */ }
+
       refresh();
       loadChat();
       loadPlan();
+      loadGeneration();
+      loadWsGovernance();
       setInterval(refresh, 1500);
       setInterval(loadChat, 2000);
       setInterval(loadPlan, 3000);
+      setInterval(loadGeneration, 1200);
+      setInterval(loadWsGovernance, 8000);
     </script>
   </body>
 </html>
@@ -1094,11 +1262,29 @@ GOVERNANCE_SHELL = """<!doctype html>
     <title>Qaymark Governance</title>
     <style>
       body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { max-width: 1200px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
-      .card { background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 16px; }
+      main {
+        margin: 0;
+        padding: 18px clamp(16px, 3vw, 40px) 40px;
+        display: grid;
+        gap: 18px;
+        align-items: start;
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(23,32,52,.96), rgba(15,23,42,.96));
+        border: 1px solid #334155;
+        border-radius: 18px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 28px rgba(2,6,23,.35);
+      }
+      #frameworks {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        align-items: start;
+      }
       a { color: #93c5fd; }
       h1, h2, h3 { margin: 0 0 8px; }
-      .fw { border: 1px solid #334155; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+      .fw { border: 1px solid #334155; border-radius: 14px; margin: 0; overflow: hidden; }
       .fw-head { padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between;
         align-items: center; background: #0b1220; }
       .fw-head:hover { background: #131c2e; }
@@ -1301,6 +1487,257 @@ GOVERNANCE_SHELL = """<!doctype html>
 """
 
 
+COMPANION_STYLE = """
+      .qm-toolbar { position: fixed; top: 12px; right: 14px; z-index: 40;
+        display: flex; gap: 8px; }
+      .qm-toolbar button { border: 1px solid #334155; background: rgba(17,24,39,.9);
+        color: #e2e8f0; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
+      .qm-toolbar button.on { background: #8b5cf6; border-color: #8b5cf6; }
+      .qm-card-bar { display: flex; align-items: center; gap: 8px; margin: -2px 0 6px; }
+      .qm-drag { cursor: grab; color: #64748b; user-select: none; font-size: 1rem; }
+      .qm-spacer { flex: 1; }
+      .qm-pin { border: 1px solid #334155; background: transparent; color: #94a3b8;
+        border-radius: 8px; padding: 2px 8px; font: inherit; cursor: pointer; font-size: .8rem; }
+      .card.pinned { outline: 2px solid rgba(139,92,246,.7); outline-offset: 2px; }
+      .card.pinned .qm-pin { color: #c4b5fd; border-color: rgba(139,92,246,.6); }
+      .qm-dragging { opacity: .45; }
+      body.qm-pinned-only main > *:not(.pinned) { display: none; }
+      .qm-dock-toggle { position: fixed; right: 18px; bottom: 18px; z-index: 41; border: 0;
+        border-radius: 999px; padding: 12px 16px; background: #8b5cf6; color: #fff;
+        cursor: pointer; font: inherit; box-shadow: 0 10px 24px rgba(2,6,23,.5); }
+      .qm-dock { position: fixed; right: 18px; bottom: 74px; z-index: 41;
+        width: min(380px, 92vw); height: min(60vh, 560px); display: none;
+        flex-direction: column; background: #0b1220; border: 1px solid #334155;
+        border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(2,6,23,.6); }
+      .qm-dock.open { display: flex; }
+      .qm-dock header { padding: 10px 12px; background: #111827;
+        border-bottom: 1px solid #334155; display: flex;
+        justify-content: space-between; align-items: center; }
+      .qm-dock .qm-log { flex: 1; overflow: auto; padding: 12px; display: flex;
+        flex-direction: column; gap: 8px; }
+      .qm-msg { padding: 8px 10px; border-radius: 12px; max-width: 88%; font-size: .88rem;
+        line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+      .qm-msg.operator { align-self: flex-end; background: rgba(139,92,246,.22);
+        border: 1px solid rgba(139,92,246,.4); }
+      .qm-msg.loop { align-self: flex-start; background: rgba(34,211,238,.12);
+        border: 1px solid rgba(34,211,238,.3); }
+      .qm-msg.system { align-self: center; background: rgba(148,163,184,.14); color: #cbd5e1; }
+      .qm-dock form { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #334155; }
+      .qm-dock textarea { flex: 1; resize: none; border-radius: 10px; border: 1px solid #334155;
+        background: #020617; color: inherit; font: inherit; padding: 8px; }
+      .qm-dock form button { border: 0; border-radius: 10px; background: #8b5cf6; color: #fff;
+        padding: 8px 12px; cursor: pointer; font: inherit; }
+"""
+
+
+COMPANION_BODY = """
+    <div class="qm-toolbar">
+      <button id="qm-pinned" type="button" data-action="pinned-view">My dashboard</button>
+      <button id="qm-reset" type="button" data-action="reset-layout">Reset layout</button>
+    </div>
+    <button class="qm-dock-toggle" id="qm-dock-toggle" type="button" data-action="toggle-chat">
+      Chat</button>
+    <section class="qm-dock" id="qm-dock" aria-label="Factory copilot chat">
+      <header><strong>Factory copilot</strong>
+        <button id="qm-dock-close" type="button" data-action="close-chat"
+          style="background:none;border:0;color:#94a3b8;cursor:pointer">&times;</button></header>
+      <div class="qm-log" id="qm-log" aria-live="polite"></div>
+      <form id="qm-form">
+        <textarea id="qm-input" rows="2"
+          placeholder="Ask, or drive: /launch tetris-web, /run-all, /redirect ..."></textarea>
+        <button type="submit" data-action="send-chat">Send</button>
+      </form>
+    </section>
+"""
+
+
+COMPANION_SCRIPT = """
+      (function () {
+        const PAGE = location.pathname;
+        const orderKey = 'qm-order:' + PAGE;
+        const pinKey = 'qm-pins:' + PAGE;
+        const openKey = 'qm-chat-open';
+        const pinnedKey = 'qm-pinned-only:' + PAGE;
+        function slug(text) {
+          return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '');
+        }
+        function blocks() {
+          return Array.from(document.querySelectorAll('main > .card, main > .cols'));
+        }
+        function load(key) {
+          try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
+        }
+        function save(key, value) {
+          try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { return; }
+        }
+        function assignIds() {
+          const seen = {};
+          blocks().forEach(function (el, i) {
+            if (el.dataset.qmId) { return; }
+            const head = el.querySelector('h1, h2');
+            let id = head ? slug(head.textContent) : 'block-' + i;
+            if (!id || seen[id]) { id = (id || 'block') + '-' + i; }
+            seen[id] = true;
+            el.dataset.qmId = id;
+          });
+        }
+        function applyOrder() {
+          const order = load(orderKey);
+          if (!order) { return; }
+          const main = document.querySelector('main');
+          const map = {};
+          blocks().forEach(function (el) { map[el.dataset.qmId] = el; });
+          order.forEach(function (id) { if (map[id]) { main.appendChild(map[id]); } });
+        }
+        function saveOrder() {
+          save(orderKey, blocks().map(function (el) { return el.dataset.qmId; }));
+        }
+        function applyPins() {
+          const pins = load(pinKey) || [];
+          blocks().forEach(function (el) {
+            const on = pins.indexOf(el.dataset.qmId) !== -1;
+            el.classList.toggle('pinned', on);
+            const btn = el.querySelector('.qm-card-bar .qm-pin');
+            if (btn) { btn.textContent = on ? 'Unpin' : 'Pin'; }
+          });
+        }
+        function togglePin(el) {
+          const pins = load(pinKey) || [];
+          const id = el.dataset.qmId;
+          const at = pins.indexOf(id);
+          if (at === -1) { pins.push(id); } else { pins.splice(at, 1); }
+          save(pinKey, pins);
+          applyPins();
+        }
+        function addBars() {
+          blocks().forEach(function (el) {
+            if (el.querySelector('.qm-card-bar')) { return; }
+            const bar = document.createElement('div');
+            bar.className = 'qm-card-bar';
+            bar.innerHTML = '<span class="qm-drag" title="Drag to rearrange">&#9783;</span>'
+              + '<span class="qm-spacer"></span>'
+              + '<button class="qm-pin" type="button" data-action="pin">Pin</button>';
+            el.insertBefore(bar, el.firstChild);
+            const handle = bar.querySelector('.qm-drag');
+            handle.addEventListener('mousedown', function () {
+              el.setAttribute('draggable', 'true');
+            });
+            handle.addEventListener('mouseup', function () {
+              el.removeAttribute('draggable');
+            });
+            bar.querySelector('.qm-pin').addEventListener('click', function () {
+              togglePin(el);
+            });
+            el.addEventListener('dragstart', function () { el.classList.add('qm-dragging'); });
+            el.addEventListener('dragend', function () {
+              el.classList.remove('qm-dragging');
+              el.removeAttribute('draggable');
+              saveOrder();
+            });
+            el.addEventListener('dragover', function (ev) {
+              ev.preventDefault();
+              const drag = document.querySelector('.qm-dragging');
+              if (!drag || drag === el) { return; }
+              const rect = el.getBoundingClientRect();
+              const after = ev.clientY > rect.top + rect.height / 2;
+              el.parentNode.insertBefore(drag, after ? el.nextSibling : el);
+            });
+          });
+        }
+        function wireToolbar() {
+          const pinnedBtn = document.getElementById('qm-pinned');
+          function setPinned(on) {
+            document.body.classList.toggle('qm-pinned-only', on);
+            pinnedBtn.classList.toggle('on', on);
+            save(pinnedKey, on);
+          }
+          pinnedBtn.addEventListener('click', function () {
+            setPinned(!document.body.classList.contains('qm-pinned-only'));
+          });
+          if (load(pinnedKey)) { setPinned(true); }
+          document.getElementById('qm-reset').addEventListener('click', function () {
+            localStorage.removeItem(orderKey);
+            localStorage.removeItem(pinKey);
+            localStorage.removeItem(pinnedKey);
+            location.reload();
+          });
+        }
+        function esc(text) {
+          return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        }
+        let chatTimer = null;
+        async function loadDock() {
+          try {
+            const res = await fetch('/api/global-chat.json', { cache: 'no-store' });
+            const data = await res.json();
+            const log = document.getElementById('qm-log');
+            const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+            log.innerHTML = (data.messages || []).map(function (m) {
+              return '<div class="qm-msg ' + m.role + '">' + esc(m.text) + '</div>';
+            }).join('');
+            if (atBottom) { log.scrollTop = log.scrollHeight; }
+          } catch (e) { return; }
+        }
+        function openDock(open) {
+          const dock = document.getElementById('qm-dock');
+          dock.classList.toggle('open', open);
+          save(openKey, open);
+          if (open) { loadDock(); chatTimer = setInterval(loadDock, 4000); }
+          else if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+        }
+        function wireDock() {
+          document.getElementById('qm-dock-toggle').addEventListener('click', function () {
+            const dock = document.getElementById('qm-dock');
+            openDock(!dock.classList.contains('open'));
+          });
+          document.getElementById('qm-dock-close').addEventListener('click', function () {
+            openDock(false);
+          });
+          document.getElementById('qm-form').addEventListener('submit', async function (ev) {
+            ev.preventDefault();
+            const box = document.getElementById('qm-input');
+            const text = box.value.trim();
+            if (!text) { return; }
+            box.value = '';
+            await fetch('/api/global-chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ message: text }),
+            });
+            loadDock();
+          });
+          if (load(openKey)) { openDock(true); }
+        }
+        function init() {
+          assignIds();
+          applyOrder();
+          addBars();
+          applyPins();
+          wireToolbar();
+          wireDock();
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else { init(); }
+      })();
+"""
+
+
+def _with_companion(shell: str) -> str:
+    """Inject the shared toolbar, drag/pin behavior, and chat dock into a page."""
+
+    head = f"<style>{COMPANION_STYLE}</style>\n  </head>"
+    tail = f"{COMPANION_BODY}<script>{COMPANION_SCRIPT}</script>\n  </body>"
+    return shell.replace("  </head>", head, 1).replace("  </body>", tail, 1)
+
+
+HTML_SHELL = _with_companion(HTML_SHELL)
+CONSOLE_SHELL = _with_companion(CONSOLE_SHELL)
+GOVERNANCE_SHELL = _with_companion(GOVERNANCE_SHELL)
+
+
 @dataclass
 class WorkspaceStatus:
     path: Path
@@ -1347,6 +1784,43 @@ def _read_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _read_text_tail(path: Path, limit: int) -> str:
+    """Return the last *limit* characters of a text file, or '' if absent."""
+
+    if not path.exists():
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return text[-limit:]
+
+
+_GENERATION_FRESH_SECONDS = 45.0
+
+
+def _generation_status(artifact: Path) -> dict:
+    """An honest snapshot of live generation for one workspace.
+
+    ``active`` is true only when the marker says active *and* the stream file
+    was touched recently — otherwise a run killed mid-stream would show a
+    permanent, lying "generating now".
+    """
+
+    text = _read_text_tail(artifact / "generation.txt", 8000)
+    marker = _read_text_tail(artifact / "generation.state", 20).strip()
+    gen_file = artifact / "generation.txt"
+    fresh = False
+    if gen_file.exists():
+        try:
+            fresh = (time.time() - gen_file.stat().st_mtime) < _GENERATION_FRESH_SECONDS
+        except OSError:
+            fresh = False
+    active = marker == "active" and fresh
+    return {"text": text, "chars": len(text), "active": active, "stale": marker == "active"
+            and not fresh}
 
 
 def _env(name: str, default: str = "") -> str:
@@ -1495,6 +1969,95 @@ def _post_chat(workspace: Path, username: str, message: str) -> None:
         return
     _append_feedback(workspace, username, text)
     chat.post(workspace, "system", "Noted — I'll fold that into the next build.")
+
+
+def _chat_model() -> str:
+    return os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:3b")
+
+
+def _chat_base_url() -> str:
+    return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
+_GLOBAL_CHAT_SYSTEM = (
+    "You are the Qaymark factory copilot. Be concise and practical. Help the "
+    "operator decide what to build or change next, and when useful suggest a "
+    "slash-command they can run: /launch <job>, /run-all, /pause <loop>, "
+    "/resume <loop>, /stop <loop>, /redirect <loop> <task>, "
+    "/feedback <loop> <text>."
+)
+
+
+def _global_chat_reply(message: str, history: list[dict]) -> str | None:
+    """Ask the model for a conversational reply; None if the model is offline."""
+
+    recent = "\n".join(f"{item['role']}: {item['text']}" for item in history[-8:])
+    user = (recent + "\noperator: " + message).strip()
+    try:
+        reply = ollama_chat(_GLOBAL_CHAT_SYSTEM, user, _chat_model(), _chat_base_url())
+    except OSError:
+        return None
+    return reply.strip() or None
+
+
+def _drive_factory(root: Path, username: str, text: str) -> str:
+    """Execute an operator slash-command against the factory; return a summary."""
+
+    parts = text.strip().split()
+    command = parts[0].lower().lstrip("/")
+    rest = parts[1:]
+    try:
+        if command == "launch" and rest:
+            forever = any(token in {"forever", "--forever"} for token in rest[1:])
+            orchestrator.launch_loop(rest[0], model=None, forever=forever, root=root)
+            return f"Launched loop '{rest[0]}'" + (" (forever)." if forever else ".")
+        if command in {"run-all", "runall"}:
+            started = orchestrator.launch_pending(model=None, forever=True, root=root)
+            return f"Started {len(started)} pending loop(s)."
+        if command in {"pause", "resume", "stop"} and rest:
+            action = {"pause": orchestrator.pause_loop, "resume": orchestrator.resume_loop,
+                      "stop": orchestrator.stop_loop}[command]
+            action(rest[0], f"{command} via chat by {username}", root=root)
+            return f"{command.capitalize()}d loop '{rest[0]}'."
+        if command == "redirect" and len(rest) >= 2:
+            task = " ".join(rest[1:])
+            orchestrator.redirect_loop(rest[0], task, f"redirect via chat by {username}", root=root)
+            return f"Redirected '{rest[0]}' to: {task}"
+        if command == "feedback" and len(rest) >= 2:
+            target = _resolve_child(root, rest[0])
+            if target is None:
+                return f"Unknown loop '{rest[0]}'."
+            _append_feedback(target, username, " ".join(rest[1:]))
+            return f"Left feedback for '{rest[0]}'; it rebuilds on the next cycle."
+    except (KeyError, ValueError, RuntimeError, OSError) as exc:
+        return f"Could not run that command: {exc}"
+    return ("Commands: /launch <job>, /run-all, /pause|/resume|/stop <loop>, "
+            "/redirect <loop> <task>, /feedback <loop> <text>.")
+
+
+def _resolve_child(root: Path, name: str) -> Path | None:
+    target = (root / name).resolve()
+    if root.resolve() not in target.parents or not target.is_dir():
+        return None
+    return target
+
+
+def _global_chat(root: Path, username: str, message: str) -> dict:
+    """Persistent operator chat that can talk to the model and drive the factory."""
+
+    text = message.strip()
+    if not text:
+        return {"posted": False}
+    chat.post(root, "operator", text)
+    if text.startswith("/"):
+        chat.post(root, "system", _drive_factory(root, username, text))
+        return {"posted": True, "drove": True}
+    reply = _global_chat_reply(text, chat.read(root))
+    if reply is None:
+        reply = ("Model is offline right now. You can still drive the factory: "
+                 "/launch <job>, /run-all, or /redirect <loop> <task>.")
+    chat.post(root, "loop", reply)
+    return {"posted": True, "drove": False}
 
 
 def _apply_plan_op(workspace: Path, form: dict[str, str]) -> dict:
@@ -1828,6 +2391,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if path == "/api/chat.json":
             self._serve_chat()
             return
+        if path == "/api/global-chat.json":
+            body = json.dumps({"messages": chat.read(self.root)}, indent=2).encode("utf-8")
+            self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
+            return
+        if path == "/api/generation.json":
+            self._serve_generation()
+            return
         if path == "/api/plan.json":
             self._serve_plan()
             return
@@ -1867,6 +2437,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self._send(HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8", b"invalid workspace")
             return
         body = json.dumps({"plan": plan_mod.read_plan(target)}, indent=2).encode("utf-8")
+        self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
+
+    def _serve_generation(self) -> None:
+        target = self._serve_ws_query()
+        if target is None:
+            self._send(HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8", b"invalid workspace")
+            return
+        payload = _generation_status(target / ".harness")
+        payload["phase"] = str(_read_json(
+            target / ".harness" / "status.json", {"phase": "idle"}).get("phase", "idle"))
+        body = json.dumps(payload).encode("utf-8")
         self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
 
     def _resolve_workspace(self, rel: str) -> Path | None:
@@ -1924,6 +2505,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         body = json.dumps({"ok": True, "result": result}).encode("utf-8")
         self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
 
+    def _handle_global_chat(self) -> None:
+        username = self._require_auth()
+        if username is None:
+            self._send(HTTPStatus.UNAUTHORIZED, "text/plain; charset=utf-8", b"login required")
+            return
+        size = int(self.headers.get("Content-Length", "0"))
+        form = _parse_form(self.rfile.read(size))
+        result = _global_chat(self.root, username, form.get("message", ""))
+        body = json.dumps({"ok": True, "result": result}).encode("utf-8")
+        self._send(HTTPStatus.OK, "application/json; charset=utf-8", body)
+
     def _handle_loop_json(self, apply) -> None:
         username = self._require_auth()
         if username is None:
@@ -1967,6 +2559,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "/api/feedback": lambda: self._handle_workspace_post(_append_feedback, "message"),
             "/api/rules": lambda: self._handle_workspace_post(_append_rule, "rule"),
             "/api/chat": lambda: self._handle_workspace_post(_post_chat, "message"),
+            "/api/global-chat": self._handle_global_chat,
             "/api/plan": lambda: self._handle_ws_json(_apply_plan_op),
             "/api/framework-rule": self._handle_framework_rule,
             "/api/framework-add-rule": lambda: self._handle_global_json(_framework_add_rule),
@@ -2032,6 +2625,27 @@ def _default_password_notice() -> None:
     raise SystemExit("Set DASHBOARD_PASSWORD to enable the signed-in control plane.")
 
 
+def _bind_server(handler, port: int) -> ThreadingHTTPServer:
+    """Bind the dashboard, falling back to a free port if *port* is taken.
+
+    Running ``make up`` when a dashboard is already listening must not crash
+    with a raw traceback: if the requested port is busy, pick a free one and
+    report it instead.
+    """
+
+    try:
+        return ThreadingHTTPServer(("127.0.0.1", port), handler)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        print(
+            f"port {port} is already in use (another dashboard?); "
+            "binding a free port instead.",
+            flush=True,
+        )
+        return ThreadingHTTPServer(("127.0.0.1", 0), handler)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Serve a signed-in Qaymark control plane")
     parser.add_argument("root", help="Workspace or parent directory to inspect")
@@ -2045,7 +2659,7 @@ def main() -> int:
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     root = Path(args.root).expanduser().resolve()
     handler = partial(DashboardHandler, root=root)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
+    server = _bind_server(handler, args.port)
     port = server.server_address[1]
     print(f"dashboard: http://127.0.0.1:{port}", flush=True)
     print(f"root: {root}", flush=True)

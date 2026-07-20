@@ -4,14 +4,22 @@ ROOT ?= $(WORKSPACE)
 TASK ?=
 MODEL ?=
 HARNESS_ARGS ?=
+HARNESS_STATE_DIR ?= $(shell echo "$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark")
+HARNESS_LAST_WORKSPACE_FILE ?= $(HARNESS_STATE_DIR)/.last-workspace
+HARNESS_TASK ?= Create a Python module that adds two numbers with a CLI
+HARNESS_WORKSPACE ?=
 
-.PHONY: help up down logs pull chat harness supervise control-room control loops \
-	dashboard rebuild-ui play test hygiene gate install hooks clean
+.PHONY: help up demo runtime runtime-if-needed keep audit down logs pull chat harness supervise \
+	control-room control loops dashboard rebuild-ui play test hygiene gate install hooks clean
 
 help:
 	@echo "Qaymark — local AI code-generation factory"
 	@echo
-	@echo "  make up                        Start Ollama + Open WebUI and pull the model"
+	@echo "  make up                        Start the whole system: model runtime + control plane UI"
+	@echo "  make keep                      Run the forever-keeper (keep loops busy; audit when green)"
+	@echo "  make audit                     Summarise overnight progress from the keeper journal"
+	@echo "  make demo                      Run the offline one-shot harness on the last workspace"
+	@echo "  make runtime                   Only start Ollama + Open WebUI and pull the model"
 	@echo "  make down                      Stop the stack"
 	@echo "  make logs                      Follow container logs"
 	@echo "  make install                   Install the qaymark CLI (pip install -e .)"
@@ -34,7 +42,70 @@ help:
 	@echo "  make hygiene PATH_ARG=dir      Run slop-be-gone against a path (needs sbg)"
 	@echo "  make clean                     Remove the tool cache"
 
-up:
+up: runtime-if-needed
+	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$ROOT" ; \
+	USER_NAME="$${DASHBOARD_USER:-admin}" ; \
+	PASS="$${DASHBOARD_PASSWORD:-qaymark}" ; \
+	UI_PORT="$${PORT:-8765}" ; \
+	echo "keeper: starting the forever-keeper (keeps loops working, audits when green)" ; \
+	setsid python3 scripts/keeper.py --root "$$ROOT" >/dev/null 2>&1 & \
+	echo "" ; \
+	echo "Qaymark is up. Open the control plane to do everything:" ; \
+	echo "  URL:  http://127.0.0.1:$$UI_PORT" ; \
+	echo "  user: $$USER_NAME   password: $$PASS" ; \
+	echo "" ; \
+	DASHBOARD_USER="$$USER_NAME" DASHBOARD_PASSWORD="$$PASS" \
+	python3 scripts/dashboard.py "$$ROOT" --port "$$UI_PORT"
+
+keep:
+	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$ROOT" ; \
+	python3 scripts/keeper.py --root "$$ROOT" $(if $(INTERVAL),--interval $(INTERVAL),)
+
+# Best-effort model runtime: skip if Ollama is already reachable, or if the
+# operator opts out with QAYMARK_NO_RUNTIME=1 (the harness still has a fallback).
+runtime-if-needed:
+	@OLLAMA_HOST="$${OLLAMA_HOST:-localhost:11434}" ; \
+	if curl -s -m 3 "http://$$OLLAMA_HOST/api/tags" >/dev/null 2>&1 ; then \
+		echo "model runtime: already reachable on $$OLLAMA_HOST" ; \
+	elif [ "$${QAYMARK_NO_RUNTIME:-0}" = "1" ] ; then \
+		echo "model runtime: skipped (QAYMARK_NO_RUNTIME=1)" ; \
+	else \
+		echo "model runtime: starting Ollama + Open WebUI..." ; \
+		./scripts/bootstrap.sh || echo "runtime start failed; using the built-in fallback" ; \
+	fi
+
+audit:
+	@ROOT="$${QAYMARK_FACTORY_ROOT:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	QAYMARK_FACTORY_ROOT="$$ROOT" python3 scripts/morning_audit.py
+
+demo:
+	@STATE_DIR="$${HARNESS_STATE_DIR:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	LAST_WORKSPACE_FILE="$$STATE_DIR/.last-workspace" ; \
+	if [ -n "$${HARNESS_WORKSPACE:-}" ]; then \
+		WORKSPACE="$$HARNESS_WORKSPACE"; \
+	elif [ -f "$$LAST_WORKSPACE_FILE" ]; then \
+		WORKSPACE="$$(cat "$$LAST_WORKSPACE_FILE")"; \
+	else \
+		WORKSPACE="$$STATE_DIR/tetris-web"; \
+	fi ; \
+	case "$$WORKSPACE" in \
+		*tetris*) DEFAULT_TASK="Build a browser Tetris game" ;; \
+		*) DEFAULT_TASK="Create a Python module that adds two numbers with a CLI" ;; \
+	esac ; \
+	TASK="$${HARNESS_TASK:-$$DEFAULT_TASK}" ; \
+	mkdir -p "$$STATE_DIR" "$$WORKSPACE" ; \
+	printf '%s\n' "$$WORKSPACE" > "$$LAST_WORKSPACE_FILE" ; \
+	echo "Starting the local code harness demo at $$WORKSPACE" ; \
+	python3 scripts/code_harness.py \
+		--task "$$TASK" \
+		--workspace "$$WORKSPACE" \
+		--max-attempts 1 \
+		--validation-command "python3 -m compileall -q ." \
+		$(HARNESS_ARGS)
+
+runtime:
 	./scripts/bootstrap.sh
 
 down:
@@ -53,6 +124,9 @@ chat:
 harness:
 	@test -n "$(TASK)" || { echo "Usage: make harness TASK=\"...\" WORKSPACE=/path"; exit 1; }
 	@test -n "$(WORKSPACE)" || { echo "Set WORKSPACE=/path/to/dir"; exit 1; }
+	@STATE_DIR="$${HARNESS_STATE_DIR:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$STATE_DIR" ; \
+	printf '%s\n' "$(WORKSPACE)" > "$$STATE_DIR/.last-workspace" ; \
 	python3 scripts/code_harness.py \
 		--task "$(TASK)" \
 		--workspace "$(WORKSPACE)" \
@@ -62,6 +136,9 @@ harness:
 supervise:
 	@test -n "$(TASK)" || { echo "Usage: make supervise TASK=\"...\" WORKSPACE=/path"; exit 1; }
 	@test -n "$(WORKSPACE)" || { echo "Set WORKSPACE=/path/to/dir"; exit 1; }
+	@STATE_DIR="$${HARNESS_STATE_DIR:-$${XDG_STATE_HOME:-$$HOME/.local/state}/qaymark}" ; \
+	mkdir -p "$$STATE_DIR" ; \
+	printf '%s\n' "$(WORKSPACE)" > "$$STATE_DIR/.last-workspace" ; \
 	python3 scripts/code_harness.py \
 		--task "$(TASK)" \
 		--workspace "$(WORKSPACE)" \

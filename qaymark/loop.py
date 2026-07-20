@@ -89,7 +89,9 @@ def _augment_system_with_plan(config: HarnessConfig, system: str) -> str:
         return system
     return (
         f"{system}\n\nThe operator is steering you with this plan — honour the "
-        f"current focus step and the goal:\n{text}"
+        f"current focus step and the goal, but ALWAYS return COMPLETE, runnable "
+        f"files (never an empty file or a stub, even if a step sounds "
+        f"incremental):\n{text}"
     )
 
 
@@ -152,6 +154,17 @@ def _write_status(
     path = _status_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if phase == "passed":
+        _write_green_marker(config)
+
+
+def _write_green_marker(config: HarnessConfig) -> None:
+    """Record a durable proof-of-green so a later 'watching'/'reverted' status
+    (files rolled back to the last good build) is never misread as not-green."""
+
+    marker = config.artifact_dir() / "green.json"
+    payload = {"build": _read_build_count(config), "task": config.task}
+    marker.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _fallback_python_solution() -> list[dict[str, object]]:
@@ -285,6 +298,15 @@ def fallback_operations(task: str) -> list[dict[str, object]]:
     return _fallback_python_solution()
 
 
+def _fallback_payload(task: str, error: str | None = None) -> dict[str, object]:
+    """A deterministic fallback payload when the model service is unavailable."""
+
+    summary = "fallback: Ollama unavailable"
+    if error:
+        summary = f"{summary} ({error})"
+    return {"summary": summary, "operations": fallback_operations(task)}
+
+
 def provision(config: HarnessConfig) -> Tools:
     slop_src = ensure_slop_src(config.cache_dir)
     drift_src = ensure_drift_src(config.cache_dir) if config.use_reference else None
@@ -347,7 +369,30 @@ def run_reference(config: HarnessConfig, tools: Tools) -> ReferenceResult:
 
 
 def _generate(config: HarnessConfig, system: str, user: str) -> dict[str, object]:
-    response = ollama_chat(system, user, config.model, config.base_url, config.request_timeout)
+    artifact = config.artifact_dir()
+    artifact.mkdir(parents=True, exist_ok=True)
+    live = artifact / "generation.txt"
+    state = artifact / "generation.state"
+    live.write_text("", encoding="utf-8")
+    state.write_text("active", encoding="utf-8")
+    handle = live.open("a", encoding="utf-8")
+
+    def on_delta(chunk: str) -> None:
+        handle.write(chunk)
+        handle.flush()
+
+    response: str | None = None
+    try:
+        response = ollama_chat(
+            system, user, config.model, config.base_url, on_delta=on_delta
+        )
+    except OSError as exc:
+        print(f"ollama unavailable, using built-in fallback: {exc}", file=sys.stderr)
+    finally:
+        handle.close()
+        state.write_text("done", encoding="utf-8")
+    if response is None:
+        return _fallback_payload(config.task, "ollama unavailable")
     try:
         payload = extract_json_payload(response)
     except ValueError:

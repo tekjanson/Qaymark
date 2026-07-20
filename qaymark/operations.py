@@ -31,14 +31,32 @@ def safe_target(root: Path, rel_path: str) -> Path | None:
     return resolved
 
 
+def _repair_escaped_newlines(text: str) -> str:
+    """Repair a body the model emitted on one physical line with escaped ``\\n``.
+
+    Models sometimes double-escape newlines, so a whole file arrives as a single
+    line containing literal ``\\n``/``\\t`` sequences (which then fails the syntax
+    gate forever). When a body has no real newline but does carry those escapes,
+    decode them so the file is valid instead of one broken line.
+    """
+
+    if "\n" in text:
+        return text
+    if "\\n" not in text and "\\t" not in text and "\\r" not in text:
+        return text
+    return text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+
 def _content_from_operation(operation: dict[str, Any]) -> str | None:
     content = operation.get("content")
     if content is not None:
-        return str(content)
+        return _repair_escaped_newlines(str(content))
     lines = operation.get("lines")
     if isinstance(lines, list):
+        if not lines:
+            return ""
         joined = "\n".join(str(line) for line in lines)
-        return joined + "\n" if lines else joined
+        return _repair_escaped_newlines(joined) + "\n"
     return None
 
 

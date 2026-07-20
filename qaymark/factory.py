@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import chat, control
 from .config import HarnessConfig
+from .config import ARTIFACT_DIR_NAME
 from .loop import _feedback_path, _write_status, run_harness
 from .workspace import iter_files
 
@@ -81,6 +82,7 @@ def _maybe_rebuild(
     if command.redirect_task:
         config.task = command.redirect_task
         control.clear_redirect(config.workspace)
+        (config.workspace / ARTIFACT_DIR_NAME / "green.json").unlink(missing_ok=True)
         chat.post(config.workspace, "system", "Redirected to a new task; rebuilding now.")
         print("supervisor: redirected to a new task, rebuilding", flush=True)
         return _rerun_with_rollback(config), _feedback_signature(config)

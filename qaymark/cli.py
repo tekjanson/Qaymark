@@ -93,7 +93,11 @@ def _run_fleet(config: HarnessConfig, workers: int) -> int:
 def _run_supervisor(config: HarnessConfig, poll_interval: float) -> int:
     from .factory import supervise
 
-    result = supervise(config, poll_interval=poll_interval)
+    # A forever loop supervises around the clock; a bounded turn builds to green
+    # (up to max_attempts) then exits so it yields the shared worker slot and
+    # never regenerates already-green work into red.
+    max_cycles = None if config.loop_forever else 1
+    result = supervise(config, poll_interval=poll_interval, max_cycles=max_cycles)
     return 0 if result.passed else 1
 
 
